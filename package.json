@@ -1,0 +1,21 @@
+{
+  "name": "taxi-service-project",
+  "version": "1.0.0",
+  "private": true,
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev:backend": "npm run dev -w @taxi/backend",
+    "dev:admin": "npm run dev -w @taxi/web-admin",
+    "dev:client": "npm run start -w @taxi/app-client",
+    "dev:driver": "npm run start -w @taxi/app-driver"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs"
+}
