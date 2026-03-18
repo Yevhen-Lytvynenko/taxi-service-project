@@ -1,15 +1,219 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider = "prisma-client-js"
+  engineType = "library"
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CLIENT
+  DRIVER
+  DISPATCHER
+  MANAGER
+  ADMIN
+}
+
+enum DriverStatus {
+  ACTIVE
+  OFFLINE
+  ONLINE
+  BUSY
+}
+
+enum OrderStatus {
+  CREATED
+  SEARCHING
+  ACCEPTED
+  ARRIVED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  BONUS
+}
+
+enum CarClass {
+  ECONOMY
+  COMFORT
+  BUSINESS
+  MINIVAN
+}
+
+model User {
+  id        String   @id @default(uuid())
+  username  String?  @unique
+  phone     String   @unique
+  email     String?  @unique
+  password  String
+  fullName  String
+  role      Role     @default(CLIENT)
+  rating    Float    @default(5.0)
+  pushToken String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  driverProfile   DriverProfile?
+  employeeProfile EmployeeProfile?
+  clientOrders    Order[]          @relation("ClientOrders")
+  reviews         Review[]         @relation("WrittenReviews")
+
+  @@map("users")
+  @@index([phone])
+  @@index([username])
+}
+
+model DriverProfile {
+  id            String       @id @default(uuid())
+  userId        String       @unique
+  licenseNumber String       @unique
+  status        DriverStatus @default(OFFLINE)
+  balance       Decimal      @default(0.00) @db.Decimal(10, 2)
+  currentLat    Float?
+  currentLng    Float?
+  lastActive    DateTime     @default(now())
+
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vehicle         Vehicle?
+  driverOrders    Order[]       @relation("DriverOrders")
+  transactions    Transaction[]
+  receivedReviews Review[]      @relation("DriverReviews")
+  locationLogs    LocationLog[]
+
+  @@map("driver_profiles")
+  @@index([status])
+}
+
+model EmployeeProfile {
+  id         String   @id @default(uuid())
+  userId     String   @unique
+  department String
+  salary     Decimal? @db.Decimal(10, 2)
+  hireDate   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("employee_profiles")
+}
+
+model Vehicle {
+  id             String   @id @default(uuid())
+  driverId       String   @unique
+  model          String
+  color          String
+  plateNumber    String   @unique
+  productionYear Int
+  carClass       CarClass @default(ECONOMY)
+
+  driver DriverProfile @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
+  @@map("vehicles")
+}
+
+model Tariff {
+  id          String   @id @default(uuid())
+  name        CarClass @unique
+  basePrice   Decimal  @db.Decimal(10, 2)
+  pricePerKm  Decimal  @db.Decimal(10, 2)
+  pricePerMin Decimal  @db.Decimal(10, 2)
+  minPrice    Decimal  @db.Decimal(10, 2)
+
+  orders Order[]
+
+  @@map("tariffs")
+}
+
+model Order {
+  id             String        @id @default(uuid())
+  clientId       String
+  driverId       String?
+  tariffId       String
+  pickupAddress  String
+  pickupLat      Float
+  pickupLng      Float
+  dropoffAddress String
+  dropoffLat     Float
+  dropoffLng     Float
+  distanceKm     Float
+  totalPrice     Decimal       @db.Decimal(10, 2)
+  paymentMethod  PaymentMethod @default(CASH)
+  status         OrderStatus   @default(CREATED)
+  startedAt      DateTime?
+  finishedAt     DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  client      User           @relation("ClientOrders", fields: [clientId], references: [id])
+  driver      DriverProfile? @relation("DriverOrders", fields: [driverId], references: [id])
+  tariff      Tariff         @relation(fields: [tariffId], references: [id])
+  transaction Transaction?
+  review      Review?
+  chat        Chat?
+
+  @@map("orders")
+  @@index([status])
+  @@index([clientId])
+  @@index([driverId])
+}
+
+model Chat {
+  id        String   @id @default(uuid())
+  orderId   String   @unique
+  history   Json     @default("[]")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("chats")
+}
+
+model LocationLog {
+  id        String   @id @default(uuid())
+  driverId  String
+  lat       Float
+  lng       Float
+  speed     Float?
+  timestamp DateTime @default(now())
+
+  driver DriverProfile @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
+  @@map("location_logs")
+  @@index([driverId, timestamp])
+}
+
+model Transaction {
+  id        String   @id @default(uuid())
+  driverId  String
+  orderId   String?  @unique
+  amount    Decimal  @db.Decimal(10, 2)
+  type      String
+  createdAt DateTime @default(now())
+
+  driver DriverProfile @relation(fields: [driverId], references: [id])
+  order  Order?        @relation(fields: [orderId], references: [id])
+
+  @@map("transactions")
+}
+
+model Review {
+  id        String   @id @default(uuid())
+  orderId   String   @unique
+  authorId  String
+  driverId  String
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now())
+
+  order  Order         @relation(fields: [orderId], references: [id])
+  author User          @relation("WrittenReviews", fields: [authorId], references: [id])
+  driver DriverProfile @relation("DriverReviews", fields: [driverId], references: [id])
+
+  @@map("reviews")
 }

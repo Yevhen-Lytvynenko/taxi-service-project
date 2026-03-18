@@ -2,14 +2,16 @@
   "name": "taxi-service-project",
   "version": "1.0.0",
   "private": true,
-  "description": "",
+  "description": "Strum Taxi Monorepo",
   "main": "index.js",
   "scripts": {
+    "postinstall": "patch-package",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev:backend": "npm run dev -w @taxi/backend",
-    "dev:admin": "npm run dev -w @taxi/web-admin",
-    "dev:client": "npm run start -w @taxi/app-client",
-    "dev:driver": "npm run start -w @taxi/app-driver"
+    "backend": "npm run dev -w packages/backend",
+    "admin": "npm run dev -w packages/web-admin",
+    "client": "npm run start -w packages/app-client",
+    "driver": "npm run start -w packages/app-driver",
+    "clean": "rd /s /q node_modules && npm run clean -w packages/app-client && npm run clean -w packages/backend"
   },
   "workspaces": [
     "packages/*"
@@ -17,5 +19,14 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs"
+  "type": "commonjs",
+  "overrides": {
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "react-native": "0.74.5",
+    "@types/react": "18.2.79"
+  },
+  "devDependencies": {
+    "patch-package": "^8.0.1"
+  }
 }
