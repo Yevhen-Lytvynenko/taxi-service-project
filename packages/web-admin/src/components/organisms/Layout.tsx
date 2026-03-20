@@ -7,6 +7,7 @@ import {
 import { 
   Dashboard as DashboardIcon, 
   People as PeopleIcon, 
+  Person as PersonIcon,
   DirectionsCar as CarIcon, 
   LocalTaxi as TaxiIcon, 
   AttachMoney as MoneyIcon,
@@ -25,6 +26,7 @@ const menuItems = [
   { text: 'Дашборд', icon: <DashboardIcon />, path: '/dashboard' },
   { type: 'divider' },
   { text: 'Користувачі', icon: <PeopleIcon />, path: '/users' },
+  { text: 'Клієнти', icon: <PersonIcon />, path: '/clients' },
   { text: 'Водії', icon: <CarIcon />, path: '/drivers' },
   { text: 'Співробітники', icon: <BadgeIcon />, path: '/employees' },
   { type: 'divider' },

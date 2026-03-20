@@ -9,8 +9,11 @@ import {
   ListRenderItem,
 } from 'react-native';
 import { Button } from 'react-native-paper';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import io, { Socket } from 'socket.io-client';
 import api, { API_BASE } from '../api/axios';
+import { CheckeredStrip } from '../components/CheckeredStrip';
+import { colors, spacing, radius, typography } from '../theme';
 
 interface Order {
   id: string;
@@ -93,7 +96,7 @@ export const OrdersQueueScreen = ({ navigation }: OrdersQueueScreenProps) => {
       try {
         await api.put(`/orders/${orderId}`, { status: 'ACCEPTED', driverId });
         setOrders((prev) => prev.filter((o) => o.id !== orderId));
-        Alert.alert('Успіх', 'Замовлення прийнято');
+        navigation.navigate('ActiveOrder', { orderId });
       } catch (err) {
         Alert.alert('Помилка', (err as Error).message);
       } finally {
@@ -120,11 +123,24 @@ export const OrdersQueueScreen = ({ navigation }: OrdersQueueScreenProps) => {
 
     return (
       <View style={styles.card}>
-        <Text style={styles.addressLabel}>Звідки</Text>
-        <Text style={styles.address}>{item.pickupAddress}</Text>
-        <Text style={styles.addressLabel}>Куди</Text>
-        <Text style={styles.address}>{item.dropoffAddress}</Text>
-        <Text style={styles.price}>{price} грн</Text>
+        <View style={styles.addressRow}>
+          <MaterialCommunityIcons name="map-marker" size={18} color={colors.primary} style={styles.addrIcon} />
+          <View style={styles.addrBlock}>
+            <Text style={styles.addressLabel}>Звідки</Text>
+            <Text style={styles.address}>{item.pickupAddress}</Text>
+          </View>
+        </View>
+        <View style={styles.addressRow}>
+          <MaterialCommunityIcons name="map-marker-check" size={18} color={colors.primary} style={styles.addrIcon} />
+          <View style={styles.addrBlock}>
+            <Text style={styles.addressLabel}>Куди</Text>
+            <Text style={styles.address}>{item.dropoffAddress}</Text>
+          </View>
+        </View>
+        <View style={styles.priceRow}>
+          <MaterialCommunityIcons name="cash" size={20} color={colors.primary} />
+          <Text style={styles.price}>{price} грн</Text>
+        </View>
         <View style={styles.buttons}>
           <Button
             mode="contained"
@@ -132,14 +148,18 @@ export const OrdersQueueScreen = ({ navigation }: OrdersQueueScreenProps) => {
             disabled={isAccepting}
             loading={isAccepting}
             style={styles.acceptBtn}
+            labelStyle={styles.btnLabel}
+            icon="check"
           >
             Взяти
           </Button>
           <Button
             mode="outlined"
             onPress={() => handleReject(item.id)}
-            textColor="#ffd451"
+            textColor={colors.primary}
             style={styles.rejectBtn}
+            labelStyle={styles.btnLabel}
+            icon="close"
           >
             Відхилити
           </Button>
@@ -151,7 +171,7 @@ export const OrdersQueueScreen = ({ navigation }: OrdersQueueScreenProps) => {
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#ffd451" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -161,6 +181,7 @@ export const OrdersQueueScreen = ({ navigation }: OrdersQueueScreenProps) => {
       <View style={styles.header}>
         <Text style={styles.logo}>Strum</Text>
         <Text style={styles.subtitle}>Черга замовлень</Text>
+        <CheckeredStrip height={6} />
       </View>
       <FlatList
         data={orders}
@@ -168,17 +189,12 @@ export const OrdersQueueScreen = ({ navigation }: OrdersQueueScreenProps) => {
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
         ListEmptyComponent={
-          <Text style={styles.empty}>Немає доступних замовлень</Text>
+          <View style={styles.empty}>
+            <MaterialCommunityIcons name="clipboard-list-outline" size={64} color={colors.onSurfaceMuted} />
+            <Text style={styles.emptyText}>Немає доступних замовлень</Text>
+          </View>
         }
       />
-      <Button
-        mode="text"
-        onPress={() => navigation.navigate('Profile')}
-        textColor="#ffd451"
-        style={styles.profileLink}
-      >
-        Профіль
-      </Button>
     </View>
   );
 };
@@ -186,73 +202,102 @@ export const OrdersQueueScreen = ({ navigation }: OrdersQueueScreenProps) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: colors.background,
   },
   centered: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
+    backgroundColor: colors.background,
   },
   header: {
     alignItems: 'center',
-    paddingTop: 40,
-    paddingBottom: 16,
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.md,
   },
   logo: {
-    color: '#ffd451',
-    fontWeight: 'bold',
-    fontSize: 28,
+    color: colors.primary,
+    fontFamily: typography.fontFamily.bold,
+    fontSize: typography.fontSize.xxl,
   },
   subtitle: {
-    color: '#666666',
-    fontSize: 16,
+    color: colors.onSurfaceMuted,
+    fontFamily: typography.fontFamily.regular,
+    fontSize: typography.fontSize.md,
+    marginTop: spacing.xs,
+    marginBottom: spacing.md,
   },
   list: {
-    padding: 16,
-    paddingBottom: 8,
+    padding: spacing.md,
+    paddingBottom: spacing.xl,
   },
   card: {
-    backgroundColor: '#ffffff',
-    padding: 16,
-    borderRadius: 2,
-    marginBottom: 12,
+    backgroundColor: colors.surface,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  addressRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: spacing.sm,
+  },
+  addrIcon: {
+    marginRight: spacing.sm,
+    marginTop: 2,
+  },
+  addrBlock: {
+    flex: 1,
   },
   addressLabel: {
-    color: '#666666',
-    fontSize: 12,
-    marginTop: 8,
+    color: colors.onSurfaceMuted,
+    fontFamily: typography.fontFamily.regular,
+    fontSize: typography.fontSize.xs,
+    marginBottom: 2,
   },
   address: {
-    color: '#1a1a1a',
-    fontSize: 16,
-    marginBottom: 4,
+    color: colors.onBackground,
+    fontFamily: typography.fontFamily.medium,
+    fontSize: typography.fontSize.md,
+  },
+  priceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: spacing.md,
+    marginBottom: spacing.md,
   },
   price: {
-    color: '#ffd451',
-    fontWeight: 'bold',
-    fontSize: 18,
-    marginTop: 12,
-    marginBottom: 12,
+    color: colors.primary,
+    fontFamily: typography.fontFamily.bold,
+    fontSize: typography.fontSize.lg,
+    marginLeft: spacing.sm,
   },
   buttons: {
     flexDirection: 'row',
-    gap: 12,
+    gap: spacing.sm,
   },
   acceptBtn: {
     flex: 1,
+    borderRadius: radius.md,
   },
   rejectBtn: {
     flex: 1,
-    borderColor: '#ffd451',
+    borderColor: colors.primary,
+    borderRadius: radius.md,
+  },
+  btnLabel: {
+    fontFamily: typography.fontFamily.semiBold,
   },
   empty: {
-    textAlign: 'center',
-    color: '#666666',
-    fontSize: 16,
-    marginTop: 40,
+    alignItems: 'center',
+    marginTop: spacing.xl * 2,
   },
-  profileLink: {
-    marginBottom: 24,
+  emptyText: {
+    color: colors.onSurfaceMuted,
+    fontFamily: typography.fontFamily.regular,
+    fontSize: typography.fontSize.md,
+    marginTop: spacing.md,
   },
 });

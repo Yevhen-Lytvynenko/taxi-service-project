@@ -4,6 +4,7 @@ import { Login } from './pages/Login';
 import { Dashboard } from './pages/Dashboard';
 import { Users } from './pages/Users';
 import { Drivers } from './pages/Drivers';
+import { Clients } from './pages/Clients';
 import { Orders } from './pages/Orders';
 import { Tariffs } from './pages/Tariffs';
 import { Employees } from './pages/Employees';
@@ -22,6 +23,7 @@ function App() {
            <Route path="/dashboard" element={<Dashboard />} />
            <Route path="/users" element={<Users />} />
            <Route path="/drivers" element={<Drivers />} />
+           <Route path="/clients" element={<Clients />} />
            <Route path="/employees" element={<Employees />} />
            <Route path="/orders" element={<Orders />} />
            <Route path="/transactions" element={<Transactions />} />

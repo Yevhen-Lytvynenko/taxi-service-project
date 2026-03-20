@@ -36,6 +36,7 @@ export const Orders = () => {
   };
 
   const columns: GridColDef[] = [
+    { field: 'id', headerName: 'UUID', width: 280 },
     { field: 'createdAt', headerName: 'Дата', width: 150 },
     { field: 'from', headerName: 'Звідки', flex: 1 },
     { field: 'to', headerName: 'Куди', flex: 1 },

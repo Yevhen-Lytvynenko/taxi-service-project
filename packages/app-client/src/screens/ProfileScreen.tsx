@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Text, Alert } from 'react-native';
 import { Button, ActivityIndicator } from 'react-native-paper';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../api/axios';
+import { CheckeredStrip } from '../components/CheckeredStrip';
+import { colors, spacing, radius, typography } from '../theme';
 
 interface User {
   id: string;
@@ -19,6 +22,26 @@ interface ProfileScreenProps {
   onLogout: () => void;
 }
 
+const InfoRow = ({
+  icon,
+  label,
+  value,
+  last,
+}: {
+  icon: React.ComponentProps<typeof MaterialCommunityIcons>['name'];
+  label: string;
+  value: string | number;
+  last?: boolean;
+}) => (
+  <View style={[styles.infoRow, last && styles.infoRowLast]}>
+    <MaterialCommunityIcons name={icon} size={20} color={colors.primary} style={styles.infoIcon} />
+    <View style={styles.infoContent}>
+      <Text style={styles.infoLabel}>{label}</Text>
+      <Text style={styles.infoValue}>{value}</Text>
+    </View>
+  </View>
+);
+
 export const ProfileScreen = ({ navigation, onLogout }: ProfileScreenProps) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -28,7 +51,7 @@ export const ProfileScreen = ({ navigation, onLogout }: ProfileScreenProps) => {
       try {
         const res = await api.get('/auth/me');
         setUser(res.data as User);
-      } catch (error) {
+      } catch {
         setUser(null);
         onLogout();
       } finally {
@@ -48,14 +71,12 @@ export const ProfileScreen = ({ navigation, onLogout }: ProfileScreenProps) => {
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#ffd451" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
 
-  if (!user) {
-    return null;
-  }
+  if (!user) return null;
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
@@ -71,36 +92,16 @@ export const ProfileScreen = ({ navigation, onLogout }: ProfileScreenProps) => {
       <View style={styles.header}>
         <Text style={styles.logo}>Strum</Text>
         <Text style={styles.subtitle}>Профіль</Text>
+        <CheckeredStrip height={6} />
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.label}>Повне ім'я</Text>
-        <Text style={styles.value}>{user.fullName}</Text>
-
-        <Text style={styles.label}>Телефон</Text>
-        <Text style={styles.value}>{user.phone}</Text>
-
-        {user.email && (
-          <>
-            <Text style={styles.label}>Email</Text>
-            <Text style={styles.value}>{user.email}</Text>
-          </>
-        )}
-
-        <Text style={styles.label}>Рейтинг</Text>
-        <Text style={styles.value}>{user.rating ?? 5.0}</Text>
-
-        <Text style={styles.label}>Дата реєстрації</Text>
-        <Text style={styles.value}>{formatDate(user.createdAt)}</Text>
+        <InfoRow icon="account-outline" label="Повне ім'я" value={user.fullName} />
+        <InfoRow icon="phone" label="Телефон" value={user.phone} />
+        {user.email && <InfoRow icon="email-outline" label="Email" value={user.email} />}
+        <InfoRow icon="star-outline" label="Рейтинг" value={user.rating ?? 5.0} />
+        <InfoRow icon="calendar-outline" label="Дата реєстрації" value={formatDate(user.createdAt)} last />
       </View>
-
-      <Button
-        mode="contained"
-        onPress={() => navigation?.navigate('CreateOrder')}
-        style={styles.orderButton}
-      >
-        ЗАМОВИТИ ТАКСІ
-      </Button>
 
       <Button
         mode="outlined"
@@ -114,8 +115,10 @@ export const ProfileScreen = ({ navigation, onLogout }: ProfileScreenProps) => {
             ]
           );
         }}
-        textColor="#ffd451"
+        textColor={colors.primary}
         style={styles.logoutButton}
+        labelStyle={styles.logoutLabel}
+        icon="logout"
       >
         ВИХІД
       </Button>
@@ -126,50 +129,73 @@ export const ProfileScreen = ({ navigation, onLogout }: ProfileScreenProps) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
-    padding: 20,
+    backgroundColor: colors.background,
+    padding: spacing.lg,
   },
   centered: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
+    backgroundColor: colors.background,
   },
   header: {
     alignItems: 'center',
-    marginTop: 40,
-    marginBottom: 30,
+    marginTop: spacing.xl,
+    marginBottom: spacing.lg,
   },
   logo: {
-    color: '#ffd451',
-    fontWeight: 'bold',
-    fontSize: 28,
+    color: colors.primary,
+    fontFamily: typography.fontFamily.bold,
+    fontSize: typography.fontSize.xxl,
   },
   subtitle: {
-    color: '#666666',
-    fontSize: 16,
+    color: colors.onSurfaceMuted,
+    fontFamily: typography.fontFamily.regular,
+    fontSize: typography.fontSize.md,
+    marginTop: spacing.xs,
+    marginBottom: spacing.md,
   },
   card: {
-    backgroundColor: '#ffffff',
-    padding: 20,
-    borderRadius: 2,
-    marginBottom: 30,
+    backgroundColor: colors.surface,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    marginBottom: spacing.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  label: {
-    color: '#666666',
-    fontSize: 12,
-    marginBottom: 4,
-    marginTop: 16,
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
-  value: {
-    color: '#1a1a1a',
-    fontSize: 16,
+  infoRowLast: {
+    borderBottomWidth: 0,
   },
-  orderButton: {
-    marginBottom: 16,
+  infoIcon: {
+    marginRight: spacing.md,
+  },
+  infoContent: {
+    flex: 1,
+  },
+  infoLabel: {
+    color: colors.onSurfaceMuted,
+    fontFamily: typography.fontFamily.regular,
+    fontSize: typography.fontSize.xs,
+    marginBottom: 2,
+  },
+  infoValue: {
+    color: colors.onBackground,
+    fontFamily: typography.fontFamily.medium,
+    fontSize: typography.fontSize.md,
   },
   logoutButton: {
-    borderColor: '#ffd451',
+    borderColor: colors.primary,
     marginTop: 'auto',
+    borderRadius: radius.md,
+  },
+  logoutLabel: {
+    fontFamily: typography.fontFamily.semiBold,
   },
 });

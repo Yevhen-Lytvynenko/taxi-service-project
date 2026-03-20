@@ -123,6 +123,62 @@ export class OrderController {
       }
 
       const existing = await orderService.findById(id);
+      if (!existing) return res.status(404).json({ error: 'Order not found' });
+
+      const tokenDriverId = (req as any).user?.driverId;
+
+      if (status === 'ARRIVED') {
+        if (!existing.driverId) return res.status(400).json({ error: 'Order has no driver' });
+        if (tokenDriverId && tokenDriverId !== existing.driverId) {
+          return res.status(403).json({ error: 'Only the driver of this order can set ARRIVED' });
+        }
+        if (existing.status !== 'ACCEPTED') {
+          return res.status(400).json({ error: 'Can only set ARRIVED when status is ACCEPTED' });
+        }
+        const updated = await orderService.update(id, { status: 'ARRIVED' });
+        getSocketService().notifyAdminOrderUpdate(updated);
+        getSocketService().notifyOrderStatus(id, 'ARRIVED');
+        return res.json(updated);
+      }
+
+      if (status === 'IN_PROGRESS') {
+        if (!existing.driverId) return res.status(400).json({ error: 'Order has no driver' });
+        if (tokenDriverId && tokenDriverId !== existing.driverId) {
+          return res.status(403).json({ error: 'Only the driver of this order can set IN_PROGRESS (client got in)' });
+        }
+        if (existing.status !== 'ARRIVED') {
+          return res.status(400).json({ error: 'Can only set IN_PROGRESS when status is ARRIVED (client must be picked up first)' });
+        }
+        const updated = await orderService.update(id, {
+          status: 'IN_PROGRESS',
+          startedAt: new Date(),
+        });
+        getSocketService().notifyAdminOrderUpdate(updated);
+        getSocketService().notifyOrderStatus(id, 'IN_PROGRESS');
+        return res.json(updated);
+      }
+
+      if (status === 'COMPLETED') {
+        if (!existing.driverId) return res.status(400).json({ error: 'Order has no driver' });
+        if (tokenDriverId && tokenDriverId !== existing.driverId) {
+          return res.status(403).json({ error: 'Only the driver of this order can complete it' });
+        }
+        if (existing.status !== 'IN_PROGRESS') {
+          return res.status(400).json({ error: 'Can only complete when status is IN_PROGRESS' });
+        }
+        const updated = await orderService.update(id, {
+          status: 'COMPLETED',
+          finishedAt: new Date(),
+        });
+        await prisma.driverProfile.update({
+          where: { id: existing.driverId },
+          data: { status: DriverStatus.ONLINE },
+        });
+        getSocketService().notifyAdminOrderUpdate(updated);
+        getSocketService().notifyOrderStatus(id, 'COMPLETED');
+        return res.json(updated);
+      }
+
       if (status === 'CANCELLED' && existing?.driverId) {
         await prisma.driverProfile.update({
           where: { id: existing.driverId },

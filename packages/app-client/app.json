@@ -13,8 +13,19 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Дозвольте Strum використовувати ваше місцезнаходження для встановлення місця відправлення."
+      }
     },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Дозвольте Strum використовувати ваше місцезнаходження для встановлення місця відправлення."
+        }
+      ]
+    ],
     "android": {
       "package": "com.strum.appclient",
       "adaptiveIcon": {

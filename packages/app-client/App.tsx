@@ -1,11 +1,20 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 // Workaround: forces PlatformConstants to initialize before TurboModules (fixes Bridgeless crash)
 void Platform.OS;
+import {
+  useFonts,
+  Montserrat_400Regular,
+  Montserrat_500Medium,
+  Montserrat_600SemiBold,
+  Montserrat_700Bold,
+} from '@expo-google-fonts/montserrat';
 import { Provider as PaperProvider, MD3LightTheme, ActivityIndicator } from 'react-native-paper';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api, { setOnUnauthorized } from './src/api/axios';
@@ -13,27 +22,44 @@ import { LoginScreen } from './src/screens/LoginScreen';
 import { RegisterScreen } from './src/screens/RegisterScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 import { CreateOrderScreen } from './src/screens/CreateOrderScreen';
+import { OrderTrackingScreen } from './src/screens/OrderTrackingScreen';
 
 const strumTheme = {
   ...MD3LightTheme,
   colors: {
     ...MD3LightTheme.colors,
     primary: '#ffd451',
-    onPrimary: '#000000',
+    onPrimary: '#1a1a1a',
     background: '#f5f5f5',
     surface: '#ffffff',
     onSurface: '#1a1a1a',
     placeholder: '#888888',
   },
-  roundness: 2,
+  roundness: 12,
 };
 
 const AuthStack = createNativeStackNavigator();
 const MainStack = createNativeStackNavigator();
+const Tab = createBottomTabNavigator();
+
+function OrderStack() {
+  return (
+    <MainStack.Navigator screenOptions={{ headerShown: false }}>
+      <MainStack.Screen name="CreateOrder" component={CreateOrderScreen} />
+      <MainStack.Screen name="OrderTracking" component={OrderTrackingScreen} />
+    </MainStack.Navigator>
+  );
+}
 
 type ScreenProps = { navigation: unknown; route: unknown };
 
 export default function App() {
+  const [fontsLoaded] = useFonts({
+    Montserrat_400Regular,
+    Montserrat_500Medium,
+    Montserrat_600SemiBold,
+    Montserrat_700Bold,
+  });
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
@@ -71,7 +97,7 @@ export default function App() {
     return () => setOnUnauthorized(null);
   }, [handleLogout]);
 
-  if (isLoading) {
+  if (!fontsLoaded || isLoading) {
     return (
       <SafeAreaProvider>
         <PaperProvider theme={strumTheme}>
@@ -88,18 +114,42 @@ export default function App() {
       <PaperProvider theme={strumTheme}>
         <NavigationContainer>
           {isAuthenticated ? (
-            <MainStack.Navigator screenOptions={{ headerShown: false }}>
-              <MainStack.Screen name="CreateOrder">
+            <Tab.Navigator
+              screenOptions={{
+                headerShown: false,
+                tabBarActiveTintColor: '#ffd451',
+                tabBarInactiveTintColor: '#888',
+                tabBarStyle: { backgroundColor: '#ffffff', borderTopColor: '#e0e0e0' },
+                tabBarLabelStyle: { fontSize: 12, fontFamily: 'Montserrat_500Medium' },
+              }}
+            >
+              <Tab.Screen
+                name="Order"
+                component={OrderStack}
+                options={{
+                  title: 'Замовлення',
+                  tabBarIcon: ({ color, size }) => (
+                    <MaterialCommunityIcons name="car-side" size={size} color={color} />
+                  ),
+                }}
+              />
+              <Tab.Screen
+                name="Profile"
+                options={{
+                  title: 'Профіль',
+                  tabBarIcon: ({ color, size }) => (
+                    <MaterialCommunityIcons name="account" size={size} color={color} />
+                  ),
+                }}
+              >
                 {(props: ScreenProps) => (
-                  <CreateOrderScreen navigation={props.navigation as { navigate: (name: string) => void }} />
+                  <ProfileScreen
+                    navigation={props.navigation as { navigate: (name: string) => void }}
+                    onLogout={handleLogout}
+                  />
                 )}
-              </MainStack.Screen>
-              <MainStack.Screen name="Profile">
-                {(props: ScreenProps) => (
-                  <ProfileScreen navigation={props.navigation as { navigate: (name: string) => void }} onLogout={handleLogout} />
-                )}
-              </MainStack.Screen>
-            </MainStack.Navigator>
+              </Tab.Screen>
+            </Tab.Navigator>
           ) : (
             <AuthStack.Navigator screenOptions={{ headerShown: false }}>
               <AuthStack.Screen name="Login">

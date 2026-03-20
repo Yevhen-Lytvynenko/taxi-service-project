@@ -2,7 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Укажите ВАШ IP адрес (ipconfig в терминале) для эмулятора/устройства
 //const API_URL = 'http://192.168.0.102:4000/api';
-const API_URL = 'http://10.9.2.77:4000/api';
+const API_URL = 'http://10.9.2.103:4000/api';
+export const API_BASE = API_URL.replace('/api', '');
 let onUnauthorized: (() => void) | null = null;
 
 export function setOnUnauthorized(callback: (() => void) | null) {
@@ -51,10 +52,11 @@ async function request(
   return { data };
 }
 
-// axios-like interface: get/post return { data }
+// axios-like interface: get/post/put return { data }
 const api = {
   get: (path: string) => request('GET', path),
   post: (path: string, body?: object) => request('POST', path, body),
+  put: (path: string, body?: object) => request('PUT', path, body),
 };
 
 export default api;

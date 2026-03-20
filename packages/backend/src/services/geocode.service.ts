@@ -10,6 +10,7 @@ export interface GeocodeResult {
 }
 
 const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
+const NOMINATIM_REVERSE_URL = 'https://nominatim.openstreetmap.org/reverse';
 const USER_AGENT = 'StrumTaxi/1.0';
 
 export async function geocodeAddress(address: string): Promise<GeocodeResult | null> {
@@ -40,6 +41,36 @@ export async function geocodeAddress(address: string): Promise<GeocodeResult | n
     lat,
     lng,
     displayName: item.display_name || address,
+  };
+}
+
+export async function reverseGeocode(
+  lat: number,
+  lng: number
+): Promise<GeocodeResult | null> {
+  const params = new URLSearchParams({
+    lat: String(lat),
+    lon: String(lng),
+    format: 'json',
+  });
+
+  const res = await fetch(`${NOMINATIM_REVERSE_URL}?${params}`, {
+    headers: { 'User-Agent': USER_AGENT },
+  });
+
+  if (!res.ok) return null;
+
+  const item = await res.json();
+  if (!item || item.error) return null;
+
+  const resultLat = parseFloat(item.lat);
+  const resultLng = parseFloat(item.lon);
+  if (isNaN(resultLat) || isNaN(resultLng)) return null;
+
+  return {
+    lat: resultLat,
+    lng: resultLng,
+    displayName: item.display_name || `${lat}, ${lng}`,
   };
 }
 

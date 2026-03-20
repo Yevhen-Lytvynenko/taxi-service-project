@@ -7,7 +7,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon --watch src --ext ts --exec ts-node src/server.ts",
     "build": "tsc",
-    "simulate": "ts-node scripts/simulate-drivers.ts"
+    "simulate": "ts-node scripts/simulate-drivers.ts",
+    "simulate:order": "ts-node scripts/simulate-order.ts"
   },
   "keywords": [],
   "author": "",

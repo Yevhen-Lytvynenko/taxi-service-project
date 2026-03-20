@@ -1,8 +1,21 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, Text, TextInput, Alert, Image } from 'react-native';
+import {
+  View,
+  StyleSheet,
+  Text,
+  TextInput,
+  Alert,
+  Image,
+  TouchableOpacity,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
 import { Button } from 'react-native-paper';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../api/axios';
+import { CheckeredStrip } from '../components/CheckeredStrip';
+import { colors, spacing, radius, typography } from '../theme';
 
 interface LoginScreenProps {
   navigation: { navigate: (name: string) => void };
@@ -31,96 +44,138 @@ export const LoginScreen = ({ navigation, onLoginSuccess }: LoginScreenProps) =>
   };
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 0}
+    >
       <View style={styles.header}>
         <Image source={require('../../assets/Logo.png')} style={styles.logoImage} />
         <Text style={styles.logo}>Strum</Text>
         <Text style={styles.subtitle}>Водій</Text>
+        <CheckeredStrip height={6} />
       </View>
 
       <View style={styles.form}>
-        <TextInput
-          value={phone}
-          onChangeText={setPhone}
-          placeholder="Телефон"
-          placeholderTextColor="#888888"
-          keyboardType="phone-pad"
-          style={styles.input}
-        />
-        <TextInput
-          value={password}
-          onChangeText={setPassword}
-          placeholder="Пароль"
-          placeholderTextColor="#888888"
-          secureTextEntry
-          style={styles.input}
-        />
+        <View style={styles.inputWrapper}>
+          <MaterialCommunityIcons name="phone" size={22} color={colors.onSurfaceMuted} style={styles.inputIcon} />
+          <TextInput
+            value={phone}
+            onChangeText={setPhone}
+            placeholder="Телефон"
+            placeholderTextColor={colors.onSurfaceMuted}
+            keyboardType="phone-pad"
+            style={styles.input}
+          />
+        </View>
+
+        <View style={styles.inputWrapper}>
+          <MaterialCommunityIcons name="lock-outline" size={22} color={colors.onSurfaceMuted} style={styles.inputIcon} />
+          <TextInput
+            value={password}
+            onChangeText={setPassword}
+            placeholder="Пароль"
+            placeholderTextColor={colors.onSurfaceMuted}
+            secureTextEntry
+            style={styles.input}
+          />
+        </View>
 
         <Button
           mode="contained"
           onPress={handleLogin}
           loading={loading}
           disabled={loading}
-          labelStyle={{ fontSize: 18, paddingVertical: 5 }}
+          labelStyle={styles.buttonLabel}
           style={styles.button}
         >
           УВІЙТИ
         </Button>
 
-        <Button
-          mode="text"
-          onPress={() => navigation.navigate('Register')}
-          textColor="#ffd451"
-          style={styles.linkButton}
-        >
-          Немає акаунту? Реєстрація
-        </Button>
+        <TouchableOpacity onPress={() => navigation.navigate('Register')} style={styles.linkButton}>
+          <Text style={styles.linkText}>Немає акаунту? </Text>
+          <Text style={styles.linkAccent}>Реєстрація</Text>
+        </TouchableOpacity>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
-    padding: 20,
+    backgroundColor: colors.background,
+    padding: spacing.lg,
     justifyContent: 'center',
   },
   header: {
     alignItems: 'center',
-    marginBottom: 50,
+    marginBottom: spacing.xl * 2,
   },
   logoImage: {
-    width: 80,
-    height: 120,
-    marginBottom: 8,
+    width: 64,
+    height: 96,
+    marginBottom: spacing.sm,
+    resizeMode: 'contain',
   },
   logo: {
-    color: '#ffd451',
-    fontWeight: 'bold',
-    fontSize: 28,
+    color: colors.primary,
+    fontFamily: typography.fontFamily.bold,
+    fontSize: typography.fontSize.xxl,
   },
   subtitle: {
-    color: '#666666',
-    fontSize: 16,
+    color: colors.onSurfaceMuted,
+    fontFamily: typography.fontFamily.regular,
+    fontSize: typography.fontSize.md,
+    marginTop: spacing.xs,
+    marginBottom: spacing.md,
   },
   form: {
     width: '100%',
   },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: spacing.md,
+    paddingHorizontal: spacing.md,
+  },
+  inputIcon: {
+    marginRight: spacing.sm,
+  },
   input: {
-    marginBottom: 15,
-    backgroundColor: '#ffffff',
-    color: '#1a1a1a',
-    padding: 16,
-    borderRadius: 2,
-    fontSize: 16,
+    flex: 1,
+    color: colors.onBackground,
+    paddingVertical: spacing.md,
+    fontSize: typography.fontSize.md,
+    fontFamily: typography.fontFamily.regular,
   },
   button: {
-    marginTop: 10,
-    borderRadius: 0,
+    marginTop: spacing.sm,
+    borderRadius: radius.md,
+  },
+  buttonLabel: {
+    fontSize: typography.fontSize.lg,
+    fontFamily: typography.fontFamily.semiBold,
+    paddingVertical: 6,
   },
   linkButton: {
-    marginTop: 20,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: spacing.lg,
+    paddingVertical: spacing.sm,
+  },
+  linkText: {
+    color: colors.onSurfaceMuted,
+    fontFamily: typography.fontFamily.regular,
+    fontSize: typography.fontSize.md,
+  },
+  linkAccent: {
+    color: colors.primary,
+    fontFamily: typography.fontFamily.semiBold,
+    fontSize: typography.fontSize.md,
   },
 });
