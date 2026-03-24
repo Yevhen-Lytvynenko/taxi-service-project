@@ -3,10 +3,6 @@ export interface Coordinate {
   longitude: number;
 }
 
-export interface HeatmapPoint extends Coordinate {
-  weight: number;
-}
-
 export interface Driver {
   driverId: string;
   name: string;

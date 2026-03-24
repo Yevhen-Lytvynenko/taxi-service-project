@@ -1,5 +1,6 @@
 import { Server, Socket } from 'socket.io';
 import { PrismaClient, DriverStatus } from '@prisma/client'; // 1. Імпортуємо Enum
+import { clampToOdessaDriveBounds } from '../data/odessa-addresses';
 
 const prisma = new PrismaClient();
 
@@ -32,46 +33,7 @@ export class SocketService {
 
       socket.on('update_location', async (data: LocationUpdate) => {
         try {
-          const newStatus = data.status || DriverStatus.ONLINE;
-
-          const [updatedDriver] = await prisma.$transaction([
-            prisma.driverProfile.update({
-              where: { id: data.driverId },
-              data: {
-                currentLat: data.lat,
-                currentLng: data.lng,
-                status: newStatus
-              },
-              include: {
-                user: true,
-                vehicle: true
-              }
-            }),
-            prisma.locationLog.create({
-              data: {
-                driverId: data.driverId,
-                lat: data.lat,
-                lng: data.lng
-              }
-            })
-          ]);
-
-          // Відправка оновлення клієнтам (пасажирам)
-          this.io.to(`driver_tracking_${data.driverId}`).emit('driver_moved', {
-            ...data,
-            status: newStatus
-          });
-
-          // Відправка оновлення адмінам з повними даними
-          this.io.to('admin_monitoring').emit('admin:driver-update', {
-            driverId: data.driverId,
-            lat: data.lat,
-            lng: data.lng,
-            status: newStatus.toLowerCase(),
-            updatedAt: new Date().toISOString(),
-            name: updatedDriver.user.fullName,
-            carModel: updatedDriver.vehicle?.model ?? '—'
-          });
+          await this.processLocationUpdate(data);
         } catch (error) {
           console.error(`Error updating location for driver ${data.driverId}:`, error);
         }
@@ -85,6 +47,50 @@ export class SocketService {
       socket.on('disconnect', () => {
         // Handle disconnect logic if needed
       });
+    });
+  }
+
+  public async processLocationUpdate(data: LocationUpdate) {
+    const newStatus = data.status || DriverStatus.ONLINE;
+    const { lat, lng } = clampToOdessaDriveBounds(data.lat, data.lng);
+
+    const [updatedDriver] = await prisma.$transaction([
+      prisma.driverProfile.update({
+        where: { id: data.driverId },
+        data: {
+          currentLat: lat,
+          currentLng: lng,
+          status: newStatus
+        },
+        include: {
+          user: true,
+          vehicle: true
+        }
+      }),
+      prisma.locationLog.create({
+        data: {
+          driverId: data.driverId,
+          lat,
+          lng
+        }
+      })
+    ]);
+
+    this.io.to(`driver_tracking_${data.driverId}`).emit('driver_moved', {
+      ...data,
+      lat,
+      lng,
+      status: newStatus
+    });
+
+    this.io.to('admin_monitoring').emit('admin:driver-update', {
+      driverId: data.driverId,
+      lat,
+      lng,
+      status: newStatus.toLowerCase(),
+      updatedAt: new Date().toISOString(),
+      name: updatedDriver.user.fullName,
+      carModel: updatedDriver.vehicle?.model ?? '—'
     });
   }
 

@@ -4,7 +4,58 @@ import { Decimal } from '@prisma/client/runtime/library';
 
 const prisma = new PrismaClient();
 
+export interface CoordinatePoint {
+  lat: number;
+  lng: number;
+  displayName: string;
+}
+
 export class OrderService {
+  async createFromCoordinates(
+    clientId: string,
+    pickup: CoordinatePoint,
+    dropoff: CoordinatePoint,
+    paymentMethod: 'CASH' | 'CARD' | 'BONUS' = 'CASH'
+  ) {
+    const distanceKm = haversineDistanceKm(
+      pickup.lat,
+      pickup.lng,
+      dropoff.lat,
+      dropoff.lng
+    );
+
+    const tariff = await prisma.tariff.findUnique({
+      where: { name: 'ECONOMY' },
+    });
+    if (!tariff) throw new Error('Тариф ECONOMY не знайдено. Запустіть seed.');
+
+    const base = Number(tariff.basePrice);
+    const perKm = Number(tariff.pricePerKm);
+    const minPrice = Number(tariff.minPrice);
+    const total = Math.max(minPrice, base + perKm * distanceKm);
+
+    return prisma.order.create({
+      data: {
+        clientId,
+        tariffId: tariff.id,
+        pickupAddress: pickup.displayName,
+        pickupLat: pickup.lat,
+        pickupLng: pickup.lng,
+        dropoffAddress: dropoff.displayName,
+        dropoffLat: dropoff.lat,
+        dropoffLng: dropoff.lng,
+        distanceKm,
+        totalPrice: new Decimal(total),
+        paymentMethod,
+        status: 'SEARCHING',
+      },
+      include: {
+        tariff: true,
+        client: true,
+      },
+    });
+  }
+
   async createFromAddresses(
     clientId: string,
     pickupAddress: string,

@@ -35,6 +35,7 @@ export const ActiveOrderScreen = ({ navigation, route }: ActiveOrderScreenProps)
   const [routeCoords, setRouteCoords] = useState<Array<[number, number]>>([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
+  const [simulating, setSimulating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const socketRef = useRef<Socket | null>(null);
 
@@ -90,6 +91,19 @@ export const ActiveOrderScreen = ({ navigation, route }: ActiveOrderScreenProps)
     [orderId]
   );
 
+  const startSimulation = useCallback(async () => {
+    if (!orderId) return;
+    setSimulating(true);
+    try {
+      await api.post(`/orders/${orderId}/simulate`);
+      Alert.alert('Симуляція', 'Симуляцію поїздки запущено');
+    } catch (err) {
+      Alert.alert('Помилка', (err as Error).message);
+    } finally {
+      setSimulating(false);
+    }
+  }, [orderId]);
+
   useEffect(() => {
     fetchOrder();
   }, [fetchOrder]);
@@ -113,6 +127,12 @@ export const ActiveOrderScreen = ({ navigation, route }: ActiveOrderScreenProps)
     socket.on('order_status_changed', (payload: { status?: string }) => {
       if (payload?.status) setOrder((prev) => (prev ? { ...prev, status: payload.status } : null));
       fetchOrder();
+    });
+
+    socket.on('driver_moved', (payload: { lat?: number; lng?: number }) => {
+      if (typeof payload?.lat === 'number' && typeof payload?.lng === 'number') {
+        setDriverPos({ lat: payload.lat, lng: payload.lng });
+      }
     });
 
     return () => {
@@ -254,26 +274,48 @@ export const ActiveOrderScreen = ({ navigation, route }: ActiveOrderScreenProps)
           <Text style={styles.price}>{String(order.totalPrice)} грн</Text>
 
           {order.status === 'ACCEPTED' && (
-            <Button
-              mode="contained"
-              onPress={() => updateStatus('ARRIVED')}
-              loading={updating}
-              disabled={updating}
-              style={styles.btn}
-            >
-              Жду клієнта
-            </Button>
+            <>
+              <Button
+                mode="contained"
+                onPress={() => updateStatus('ARRIVED')}
+                loading={updating}
+                disabled={updating}
+                style={styles.btn}
+              >
+                Жду клієнта
+              </Button>
+              <Button
+                mode="outlined"
+                onPress={startSimulation}
+                loading={simulating}
+                disabled={simulating}
+                style={styles.btn}
+              >
+                Симулювати поїздку
+              </Button>
+            </>
           )}
           {order.status === 'ARRIVED' && (
-            <Button
-              mode="contained"
-              onPress={() => updateStatus('IN_PROGRESS')}
-              loading={updating}
-              disabled={updating}
-              style={styles.btn}
-            >
-              Клієнт сів
-            </Button>
+            <>
+              <Button
+                mode="contained"
+                onPress={() => updateStatus('IN_PROGRESS')}
+                loading={updating}
+                disabled={updating}
+                style={styles.btn}
+              >
+                Клієнт сів
+              </Button>
+              <Button
+                mode="outlined"
+                onPress={startSimulation}
+                loading={simulating}
+                disabled={simulating}
+                style={styles.btn}
+              >
+                Симулювати поїздку
+              </Button>
+            </>
           )}
           {order.status === 'IN_PROGRESS' && (
             <Button

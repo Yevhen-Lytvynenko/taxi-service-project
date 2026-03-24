@@ -1,6 +1,7 @@
 import { io } from 'socket.io-client';
 import { PrismaClient } from '@prisma/client';
 import dotenv from 'dotenv';
+import { clampToOdessaDriveBounds } from '../src/data/odessa-addresses';
 
 dotenv.config();
 
@@ -58,10 +59,13 @@ async function main() {
       if (Math.abs(driver.lat - BASE_LAT) > 0.05) driver.latDir *= -1;
       if (Math.abs(driver.lng - BASE_LNG) > 0.05) driver.lngDir *= -1;
 
+      const c = clampToOdessaDriveBounds(driver.lat, driver.lng);
+      driver.lat = c.lat;
+      driver.lng = c.lng;
       driver.socket.emit('update_location', {
         driverId: driver.id,
-        lat: driver.lat,
-        lng: driver.lng,
+        lat: c.lat,
+        lng: c.lng,
         status: 'ONLINE'
       });
     });

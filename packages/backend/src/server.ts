@@ -17,6 +17,7 @@ import locationRoutes from './routes/location.routes';
 import employeeRoutes from './routes/employee.routes';
 import geocodeRoutes from './routes/geocode.routes';
 import routeRoutes from './routes/route.routes';
+import emulationRoutes from './routes/emulation.routes';
 
 import { Server } from 'socket.io';
 
@@ -56,6 +57,7 @@ app.use('/api/locations', locationRoutes);
 app.use('/api/employees', employeeRoutes);
 app.use('/api/geocode', geocodeRoutes);
 app.use('/api/route', routeRoutes);
+app.use('/api/emulation', emulationRoutes);
 
 app.get('/', (req, res) => {
   res.send('Taxi Service API is running 🚀');

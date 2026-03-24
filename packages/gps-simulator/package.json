@@ -1,0 +1,20 @@
+{
+  "name": "@taxi/gps-simulator",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Standalone GPS demo: sends locations and demo order flow to the taxi API over HTTP + Socket.IO (no Prisma).",
+  "type": "commonjs",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "dotenv": "^16.6.1",
+    "socket.io-client": "^4.8.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.7",
+    "tsx": "^4.19.2",
+    "typescript": "^5.9.3"
+  }
+}

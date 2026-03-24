@@ -8,10 +8,12 @@
     "postinstall": "patch-package",
     "test": "echo \"Error: no test specified\" && exit 1",
     "backend": "npm run dev -w packages/backend",
+    "gps-sim": "npm run start -w @taxi/gps-simulator",
+    "emulation": "npm run gps-sim",
     "admin": "npm run dev -w packages/web-admin",
     "client": "npm run start -w packages/app-client",
     "driver": "npm run start -w packages/app-driver",
-    "start:all": "concurrently -n backend,admin,client,driver -c blue,green,magenta,cyan \"npm run backend\" \"npm run admin\" \"npm run client\" \"npm run driver\"",
+    "start:all": "concurrently -n backend,admin,client,driver,gps -c blue,green,magenta,cyan,red \"npm run backend\" \"npm run admin\" \"npm run client\" \"npm run driver\" \"npm run gps-sim\"",
     "clean": "rd /s /q node_modules && npm run clean -w packages/app-client && npm run clean -w packages/backend"
   },
   "workspaces": [

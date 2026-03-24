@@ -1,9 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_URL, API_BASE } from '../config/api';
 
-// Укажите ВАШ IP адрес (ipconfig в терминале) для эмулятора/устройства
-//const API_URL = 'http://192.168.0.102:4000/api';
-const API_URL = 'http://10.9.2.103:4000/api';
-export const API_BASE = API_URL.replace('/api', '');
+export { API_BASE };
 let onUnauthorized: (() => void) | null = null;
 
 export function setOnUnauthorized(callback: (() => void) | null) {
@@ -23,11 +21,20 @@ async function request(
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const res = await fetch(`${API_URL}${path}`, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  } catch (e) {
+    const hint =
+      `Не вдалося з’єднатися з сервером (${API_URL}). ` +
+      `Для телефону в одній Wi‑Fi створіть packages/app-client/.env з рядком EXPO_PUBLIC_API_URL=http://ВАШ_IP:4000 і перезапустіть Expo.`;
+    const err = new Error(e instanceof Error && e.message ? `${e.message}. ${hint}` : hint);
+    throw err;
+  }
 
   let data: unknown;
   const text = await res.text();

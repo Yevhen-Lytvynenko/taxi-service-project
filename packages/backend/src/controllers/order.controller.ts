@@ -1,9 +1,11 @@
 import { Request, Response } from 'express';
 import { OrderService } from '../services/order.service';
+import { OrderSimulationService } from '../services/orderSimulation.service';
 import { PrismaClient, DriverStatus } from '@prisma/client';
 import { getSocketService } from '../lib/socket';
 
 const orderService = new OrderService();
+const orderSimulationService = new OrderSimulationService();
 const prisma = new PrismaClient();
 
 export class OrderController {
@@ -199,6 +201,37 @@ export class OrderController {
       res.status(204).send();
     } catch (error: any) {
       res.status(500).json({ error: error.message });
+    }
+  }
+
+  async simulate(req: Request, res: Response) {
+    try {
+      const id = req.params.id as string;
+      const existing = await orderService.findById(id);
+      if (!existing) return res.status(404).json({ error: 'Order not found' });
+
+      const userRole = (req as any).user?.role;
+      const userDriverId = (req as any).user?.driverId;
+      const isAdmin = userRole === 'ADMIN';
+      const isAssignedDriver = existing.driverId && userDriverId === existing.driverId;
+      if (!isAdmin && !isAssignedDriver) {
+        return res.status(403).json({ error: 'Only admin or the assigned driver can start simulation' });
+      }
+
+      const status = existing.status;
+      if (status !== 'ACCEPTED' && status !== 'ARRIVED' && status !== 'IN_PROGRESS') {
+        return res.status(400).json({
+          error: `Order status must be ACCEPTED, ARRIVED, or IN_PROGRESS. Current: ${status}`,
+        });
+      }
+
+      orderSimulationService.run(id).catch((err) => {
+        console.error('[order-simulate]', err);
+      });
+
+      res.status(202).json({ message: 'Simulation started' });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
     }
   }
 }

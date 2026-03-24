@@ -28,6 +28,7 @@
     ],
     "android": {
       "package": "com.strum.appclient",
+      "usesCleartextTraffic": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"

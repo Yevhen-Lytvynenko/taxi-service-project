@@ -1,10 +1,15 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import io from 'socket.io-client';
-import api from '../api/axios';
 import type { Driver } from '../types/map.types';
 
-function lerp(a: number, b: number, t: number): number {
-  return a + (b - a) * t;
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 }
 
 function bearing(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -30,13 +35,24 @@ const getSocketUrl = () => {
   return base.replace(/\/api\/?$/, '');
 };
 
+/** Відсікаємо лише явний сміття (два демони, биті дані), щоб не блокувати нормальні кроки по маршруту */
+function isPlausibleJump(distKm: number, dtMs: number): boolean {
+  if (distKm <= 2.5) return true;
+  if (dtMs >= 3000) return true;
+  return false;
+}
+
 export function useDriverLocations() {
   const [drivers, setDrivers] = useState<Record<string, DriverWithDisplay>>({});
-  const animFrameRef = useRef<number>();
   const prevPositionsRef = useRef<Record<string, { lat: number; lng: number }>>({});
+  const lastEventTimeRef = useRef<Record<string, number>>({});
 
   const applySocketUpdate = useCallback((data: Record<string, unknown> & { driverId: string; lat: number; lng: number }) => {
     const { driverId, lat, lng } = data;
+    if (typeof lat !== 'number' || typeof lng !== 'number' || Number.isNaN(lat) || Number.isNaN(lng)) {
+      return;
+    }
+
     const name = (data.name as string) ?? '—';
     const status = String((data.status as string) ?? 'offline');
     const carModel = (data.carModel as string) ?? '—';
@@ -44,6 +60,19 @@ export function useDriverLocations() {
 
     setDrivers((prev) => {
       const existing = prev[driverId];
+      const now = Date.now();
+      const lastT = lastEventTimeRef.current[driverId] ?? 0;
+      const dtMs = lastT ? now - lastT : 10_000;
+
+      if (existing) {
+        const distKm = haversineKm(existing.lat, existing.lng, lat, lng);
+        if (!isPlausibleJump(distKm, dtMs)) {
+          return prev;
+        }
+      }
+
+      lastEventTimeRef.current[driverId] = now;
+
       const prevPos = prevPositionsRef.current[driverId];
       let displayHeading = existing?.displayHeading ?? 0;
       if (prevPos && (prevPos.lat !== lat || prevPos.lng !== lng)) {
@@ -59,8 +88,8 @@ export function useDriverLocations() {
         lng,
         carModel,
         updatedAt,
-        displayLat: existing?.displayLat ?? lat,
-        displayLng: existing?.displayLng ?? lng,
+        displayLat: lat,
+        displayLng: lng,
         displayHeading
       };
       return { ...prev, [driverId]: next };
@@ -68,73 +97,14 @@ export function useDriverLocations() {
   }, []);
 
   useEffect(() => {
-    api
-      .get('/drivers?withLocation=1')
-      .then((res) => {
-        const list = Array.isArray(res.data) ? res.data : [];
-        const map: Record<string, DriverWithDisplay> = {};
-        for (const d of list) {
-          const lat = d.currentLat ?? 0;
-          const lng = d.currentLng ?? 0;
-          if (lat === 0 && lng === 0) continue;
-          const driverId = d.id;
-          map[driverId] = {
-            driverId,
-            name: d.user?.fullName ?? '—',
-            status: String(d.status ?? 'offline').toLowerCase(),
-            lat,
-            lng,
-            carModel: d.vehicle?.model ?? '—',
-            updatedAt: d.lastActive,
-            displayLat: lat,
-            displayLng: lng,
-            displayHeading: 0
-          };
-          prevPositionsRef.current[driverId] = { lat, lng };
-        }
-        setDrivers((prev) => ({ ...prev, ...map }));
-      })
-      .catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    const socket = io(getSocketUrl());
+    const socket = io(getSocketUrl(), { transports: ['websocket', 'polling'] });
     socket.emit('admin_connect');
     socket.on('admin:driver-update', applySocketUpdate);
     return () => {
-      socket.off('admin:driver-update');
+      socket.off('admin:driver-update', applySocketUpdate);
       socket.disconnect();
     };
   }, [applySocketUpdate]);
-
-  useEffect(() => {
-    const animate = () => {
-      setDrivers((prev) => {
-        let hasPending = false;
-        const next: Record<string, DriverWithDisplay> = {};
-        for (const id of Object.keys(prev)) {
-          const d = prev[id];
-          if (d.displayLat === d.lat && d.displayLng === d.lng) {
-            next[id] = d;
-            continue;
-          }
-          hasPending = true;
-          const speed = 0.15;
-          next[id] = {
-            ...d,
-            displayLat: lerp(d.displayLat, d.lat, speed),
-            displayLng: lerp(d.displayLng, d.lng, speed)
-          };
-        }
-        return hasPending ? next : prev;
-      });
-      animFrameRef.current = requestAnimationFrame(animate);
-    };
-    animFrameRef.current = requestAnimationFrame(animate);
-    return () => {
-      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
-    };
-  }, []);
 
   return drivers;
 }
