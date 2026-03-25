@@ -117,8 +117,13 @@ export class OrderController {
 
         const fullOrder = await orderService.findById(id);
         if (fullOrder) {
-          getSocketService().notifyAdminOrderUpdate(fullOrder);
-          getSocketService().notifyOrderStatus(id, 'ACCEPTED');
+          const socket = getSocketService();
+          socket.syncGpsSimulatorDriver({ driverId, status: 'BUSY' });
+          socket.notifyAdminOrderUpdate(fullOrder);
+          socket.notifyOrderStatus(id, 'ACCEPTED');
+          void orderSimulationService.run(id).catch((err) => {
+            console.error('[order] auto simulation:', err);
+          });
           return res.json(fullOrder);
         }
         return res.status(500).json({ error: 'Order not found after update' });
@@ -128,6 +133,58 @@ export class OrderController {
       if (!existing) return res.status(404).json({ error: 'Order not found' });
 
       const tokenDriverId = (req as any).user?.driverId;
+      const userId = (req as any).user?.id as string | undefined;
+      const userRole = (req as any).user?.role as string | undefined;
+
+      if (status === 'CANCELLED') {
+        if (existing.status === 'CANCELLED' || existing.status === 'COMPLETED') {
+          return res.status(400).json({ error: 'Order is already finished' });
+        }
+
+        let allowed = false;
+        if (userRole === 'ADMIN') {
+          allowed = true;
+        } else if (userRole === 'CLIENT' && userId === existing.clientId) {
+          allowed = ['SEARCHING', 'ACCEPTED', 'ARRIVED'].includes(existing.status);
+        } else if (userRole === 'DRIVER' && tokenDriverId && existing.driverId === tokenDriverId) {
+          allowed = ['ACCEPTED', 'ARRIVED'].includes(existing.status);
+        }
+
+        if (!allowed) {
+          return res.status(403).json({
+            error: 'Cannot cancel: check your role or order status (e.g. trip already started).',
+          });
+        }
+
+        const hadDriverId = existing.driverId;
+
+        await prisma.$transaction(async (tx) => {
+          await tx.order.update({
+            where: { id },
+            data: { status: 'CANCELLED' },
+          });
+          if (hadDriverId) {
+            await tx.driverProfile.update({
+              where: { id: hadDriverId },
+              data: { status: DriverStatus.ONLINE },
+            });
+          }
+        });
+
+        const socket = getSocketService();
+        if (hadDriverId) {
+          socket.syncGpsSimulatorDriver({ driverId: hadDriverId, status: 'ONLINE' });
+        }
+        if (existing.status === 'SEARCHING') {
+          socket.broadcastOrderCancelled(id);
+        }
+        const fullOrder = await orderService.findById(id);
+        if (fullOrder) {
+          socket.notifyAdminOrderUpdate(fullOrder);
+        }
+        socket.notifyOrderStatus(id, 'CANCELLED');
+        return res.json(fullOrder);
+      }
 
       if (status === 'ARRIVED') {
         if (!existing.driverId) return res.status(400).json({ error: 'Order has no driver' });
@@ -181,15 +238,7 @@ export class OrderController {
         return res.json(updated);
       }
 
-      if (status === 'CANCELLED' && existing?.driverId) {
-        await prisma.driverProfile.update({
-          where: { id: existing.driverId },
-          data: { status: DriverStatus.ONLINE },
-        });
-      }
-
-      const order = await orderService.update(id, req.body);
-      res.json(order);
+      return res.status(400).json({ error: 'Unsupported status update' });
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }

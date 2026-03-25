@@ -100,6 +100,32 @@ function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+const BACKEND_READY_MAX_MS = 90_000;
+const BACKEND_READY_INTERVAL_MS = 400;
+
+async function waitForBackendReady(): Promise<void> {
+  const deadline = Date.now() + BACKEND_READY_MAX_MS;
+  let attempt = 0;
+  while (Date.now() < deadline) {
+    attempt += 1;
+    try {
+      const res = await fetch(SERVER_URL, { method: 'GET' });
+      if (res.ok) {
+        if (attempt > 1) {
+          console.log(`[gps-simulator] Backend ready after ${attempt} attempt(s)`);
+        }
+        return;
+      }
+    } catch {
+      // ECONNREFUSED etc. — keep polling until deadline
+    }
+    await sleep(BACKEND_READY_INTERVAL_MS);
+  }
+  throw new Error(
+    `[gps-simulator] Backend not reachable at ${SERVER_URL} within ${BACKEND_READY_MAX_MS}ms (is packages/backend running?)`
+  );
+}
+
 async function notifyOrder(orderId: string): Promise<void> {
   try {
     await api(`/notify-order/${orderId}`, { method: 'POST', body: '{}' });
@@ -364,6 +390,9 @@ async function cruiseTick(): Promise<void> {
 }
 
 async function main() {
+  console.log(`[gps-simulator] Waiting for backend at ${SERVER_URL}…`);
+  await waitForBackendReady();
+
   const boot = (await api('/bootstrap')) as { clients: BootstrapClient[]; drivers: BootstrapDriver[] };
   clients = boot.clients ?? [];
   if (clients.length < 5) {
@@ -396,6 +425,26 @@ async function main() {
   );
 
   socket = io(SERVER_URL);
+
+  socket.on(
+    'gps_sim_driver_sync',
+    (payload: { driverId?: string; status?: DriverStatus; lat?: number; lng?: number }) => {
+      if (!payload?.driverId || !payload.status) return;
+      const d = drivers.find((x) => x.id === payload.driverId);
+      if (!d) return;
+      d.status = payload.status;
+      d.routePoints = [];
+      d.routeIndex = 0;
+      d.planning = false;
+      if (payload.status === 'ONLINE' && typeof payload.lat === 'number' && typeof payload.lng === 'number') {
+        const c = clampToOdessaDriveBounds(payload.lat, payload.lng);
+        d.lat = c.lat;
+        d.lng = c.lng;
+        d.nextPlanAt = Date.now() + randomInRange(CRUISE_PAUSE_MIN_MS, CRUISE_PAUSE_MAX_MS);
+      }
+    }
+  );
+
   socket.on('connect', () => {
     console.log('[gps-simulator] Socket connected');
     drivers.forEach((d) => {

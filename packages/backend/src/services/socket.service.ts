@@ -12,6 +12,13 @@ interface LocationUpdate {
   status?: DriverStatus; // Краще використовувати строгий тип тут
 }
 
+export type GpsSimDriverSyncPayload = {
+  driverId: string;
+  status: 'ONLINE' | 'BUSY';
+  lat?: number;
+  lng?: number;
+};
+
 export class SocketService {
   private io: Server;
 
@@ -102,7 +109,17 @@ export class SocketService {
     this.io.to(`order_${orderId}`).emit('order_status_changed', { status });
   }
 
+  /** Черга водіїв: прибрати замовлення зі списку SEARCHING (скасування клієнтом). */
+  public broadcastOrderCancelled(orderId: string) {
+    this.io.emit('order_cancelled', { orderId });
+  }
+
   public notifyAdminOrderUpdate(order: any) {
     this.io.to('admin_monitoring').emit('admin:order-update', order);
+  }
+
+  /** GPS demo process: keep in-memory driver state aligned (cruise vs order leg). */
+  public syncGpsSimulatorDriver(payload: GpsSimDriverSyncPayload) {
+    this.io.emit('gps_sim_driver_sync', payload);
   }
 }

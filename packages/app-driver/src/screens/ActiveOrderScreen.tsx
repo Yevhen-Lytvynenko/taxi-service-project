@@ -6,6 +6,7 @@ import { Button } from 'react-native-paper';
 import io, { Socket } from 'socket.io-client';
 import * as Location from 'expo-location';
 import api, { API_BASE } from '../api/axios';
+import { shortOrderAddress } from '../utils/shortOrderAddress';
 import { OrderTrackingMap, TrackingPhase } from '../components/OrderTrackingMap';
 
 interface Order {
@@ -19,6 +20,11 @@ interface Order {
   status: string;
   totalPrice: string | number;
   client?: { fullName: string };
+  driver?: {
+    id?: string;
+    currentLat?: number | null;
+    currentLng?: number | null;
+  };
 }
 
 interface ActiveOrderScreenProps {
@@ -38,12 +44,22 @@ export const ActiveOrderScreen = ({ navigation, route }: ActiveOrderScreenProps)
   const [simulating, setSimulating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const socketRef = useRef<Socket | null>(null);
+  const routeRequestSeq = useRef(0);
 
   const fetchOrder = useCallback(async () => {
     if (!orderId) return;
     try {
       const { data } = await api.get(`/orders/${orderId}`);
-      setOrder(data as Order);
+      const o = data as Order;
+      setOrder(o);
+      if (
+        o.driver?.currentLat != null &&
+        o.driver?.currentLng != null &&
+        Number.isFinite(o.driver.currentLat) &&
+        Number.isFinite(o.driver.currentLng)
+      ) {
+        setDriverPos({ lat: o.driver.currentLat, lng: o.driver.currentLng });
+      }
     } catch {
       setError('Не вдалося завантажити замовлення');
     } finally {
@@ -53,12 +69,14 @@ export const ActiveOrderScreen = ({ navigation, route }: ActiveOrderScreenProps)
 
   const fetchRoute = useCallback(
     async (from: { lat: number; lng: number }, to: { lat: number; lng: number }) => {
+      const seq = ++routeRequestSeq.current;
       try {
         const fromStr = `${from.lat},${from.lng}`;
         const toStr = `${to.lat},${to.lng}`;
         const { data } = await api.get(
           `/route?from=${encodeURIComponent(fromStr)}&to=${encodeURIComponent(toStr)}`
         );
+        if (seq !== routeRequestSeq.current) return;
         const coords = (data as { coordinates?: Array<[number, number]> }).coordinates;
         if (Array.isArray(coords) && coords.length > 1) {
           setRouteCoords(coords.map(([lng, lat]) => [lat, lng] as [number, number]));
@@ -66,7 +84,9 @@ export const ActiveOrderScreen = ({ navigation, route }: ActiveOrderScreenProps)
           setRouteCoords([]);
         }
       } catch {
-        setRouteCoords([]);
+        if (seq === routeRequestSeq.current) {
+          setRouteCoords([]);
+        }
       }
     },
     []
@@ -103,6 +123,25 @@ export const ActiveOrderScreen = ({ navigation, route }: ActiveOrderScreenProps)
       setSimulating(false);
     }
   }, [orderId]);
+
+  const cancelOrder = useCallback(() => {
+    if (!orderId) return;
+    Alert.alert('Скасувати замовлення?', 'Замовлення буде закрито, ви повернетеся в чергу.', [
+      { text: 'Ні', style: 'cancel' },
+      {
+        text: 'Скасувати',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await api.put(`/orders/${orderId}`, { status: 'CANCELLED' });
+            navigation.navigate('Order', { screen: 'OrdersQueue' });
+          } catch (e) {
+            Alert.alert('Помилка', (e as Error).message);
+          }
+        },
+      },
+    ]);
+  }, [orderId, navigation]);
 
   useEffect(() => {
     fetchOrder();
@@ -143,7 +182,12 @@ export const ActiveOrderScreen = ({ navigation, route }: ActiveOrderScreenProps)
 
   const locationSubRef = useRef<{ remove: () => void } | null>(null);
   const lastLocEmitRef = useRef<number>(0);
+  const orderTripStatusRef = useRef<string | null>(null);
   const LOC_THROTTLE_MS = 2500;
+
+  useEffect(() => {
+    orderTripStatusRef.current = order?.status ?? null;
+  }, [order?.status]);
 
   useEffect(() => {
     let mounted = true;
@@ -160,6 +204,10 @@ export const ActiveOrderScreen = ({ navigation, route }: ActiveOrderScreenProps)
         const sub = await Location.watchPositionAsync(
           { accuracy: Location.Accuracy.Balanced, distanceInterval: 20 },
           (loc) => {
+            const trip = orderTripStatusRef.current;
+            if (trip === 'ACCEPTED' || trip === 'ARRIVED' || trip === 'IN_PROGRESS') {
+              return;
+            }
             const { latitude, longitude } = loc.coords;
             const now = Date.now();
             if (now - lastLocEmitRef.current >= LOC_THROTTLE_MS) {
@@ -188,23 +236,39 @@ export const ActiveOrderScreen = ({ navigation, route }: ActiveOrderScreenProps)
 
   useEffect(() => {
     if (!order) return;
+    if (order.status === 'CANCELLED') {
+      setRouteCoords([]);
+      return;
+    }
 
     const phase: TrackingPhase =
       order.status === 'IN_PROGRESS' || order.status === 'COMPLETED'
         ? 'to_dropoff'
         : 'to_pickup';
 
+    const driverLoc = order.driver
+      ? {
+          lat: order.driver.currentLat ?? order.pickupLat - 0.008,
+          lng: order.driver.currentLng ?? order.pickupLng,
+        }
+      : null;
+
     const from =
       driverPos ||
-      (phase === 'to_pickup'
-        ? { lat: order.pickupLat - 0.02, lng: order.pickupLng }
-        : { lat: order.pickupLat, lng: order.pickupLng });
+      (phase === 'to_pickup' && order.driver ? driverLoc : null) ||
+      (phase === 'to_dropoff' ? { lat: order.pickupLat, lng: order.pickupLng } : null);
+
+    if (!from) {
+      setRouteCoords([]);
+      return;
+    }
+
     const to =
       phase === 'to_pickup'
         ? { lat: order.pickupLat, lng: order.pickupLng }
         : { lat: order.dropoffLat, lng: order.dropoffLng };
 
-    fetchRoute(from, to);
+    void fetchRoute(from, to);
   }, [order, driverPos, fetchRoute]);
 
   if (!orderId) {
@@ -243,6 +307,7 @@ export const ActiveOrderScreen = ({ navigation, route }: ActiveOrderScreenProps)
     ARRIVED: 'Ви на місці підбору',
     IN_PROGRESS: 'Везете клієнта',
     COMPLETED: 'Поїздку завершено',
+    CANCELLED: 'Замовлення скасовано',
   };
 
   const sheetHeight = Math.min(height * 0.48, 360);
@@ -268,9 +333,9 @@ export const ActiveOrderScreen = ({ navigation, route }: ActiveOrderScreenProps)
             <Text style={styles.clientInfo}>Клієнт: {order.client.fullName}</Text>
           )}
           <Text style={styles.addressLabel}>Підбір</Text>
-          <Text style={styles.address}>{order.pickupAddress}</Text>
+          <Text style={styles.address}>{shortOrderAddress(order.pickupAddress)}</Text>
           <Text style={styles.addressLabel}>Висадка</Text>
-          <Text style={styles.address}>{order.dropoffAddress}</Text>
+          <Text style={styles.address}>{shortOrderAddress(order.dropoffAddress)}</Text>
           <Text style={styles.price}>{String(order.totalPrice)} грн</Text>
 
           {order.status === 'ACCEPTED' && (
@@ -292,6 +357,9 @@ export const ActiveOrderScreen = ({ navigation, route }: ActiveOrderScreenProps)
                 style={styles.btn}
               >
                 Симулювати поїздку
+              </Button>
+              <Button mode="outlined" textColor="#b71c1c" onPress={cancelOrder} style={styles.btn}>
+                Скасувати замовлення
               </Button>
             </>
           )}
@@ -315,6 +383,9 @@ export const ActiveOrderScreen = ({ navigation, route }: ActiveOrderScreenProps)
               >
                 Симулювати поїздку
               </Button>
+              <Button mode="outlined" textColor="#b71c1c" onPress={cancelOrder} style={styles.btn}>
+                Скасувати замовлення
+              </Button>
             </>
           )}
           {order.status === 'IN_PROGRESS' && (
@@ -328,7 +399,7 @@ export const ActiveOrderScreen = ({ navigation, route }: ActiveOrderScreenProps)
               Закрити замовлення
             </Button>
           )}
-          {order.status === 'COMPLETED' && (
+          {(order.status === 'COMPLETED' || order.status === 'CANCELLED') && (
             <Button mode="contained" onPress={() => navigation.navigate('Order', { screen: 'OrdersQueue' })} style={styles.btn}>
               До черги
             </Button>

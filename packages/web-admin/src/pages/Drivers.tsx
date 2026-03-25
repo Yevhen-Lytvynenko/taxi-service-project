@@ -1,11 +1,23 @@
 import { useEffect, useState } from 'react';
-import { 
-  Box, Button, Typography, Paper, IconButton, Dialog, DialogTitle, 
-  DialogContent, DialogActions, TextField, MenuItem, Chip 
+import {
+  Box,
+  Button,
+  Typography,
+  Paper,
+  IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  MenuItem,
+  Chip,
+  Tooltip,
 } from '@mui/material';
 import { DataGrid, type GridColDef } from '@mui/x-data-grid';
-import { Edit, Delete, Add } from '@mui/icons-material';
+import { Edit, Delete, Add, GpsFixed } from '@mui/icons-material';
 import { useForm } from 'react-hook-form';
+import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 
 // Типи даних (спрощені)
@@ -20,6 +32,7 @@ interface DriverData {
 }
 
 export const Drivers = () => {
+  const navigate = useNavigate();
   const [rows, setRows] = useState([]);
   const [open, setOpen] = useState(false); // Стан модального вікна
   const [editId, setEditId] = useState<string | null>(null); // Якщо null - створюємо, якщо є ID - редагуємо
@@ -136,9 +149,18 @@ export const Drivers = () => {
     {
       field: 'actions',
       headerName: 'Дії',
-      width: 150,
+      width: 200,
+      sortable: false,
       renderCell: (params) => (
         <Box>
+          <Tooltip title="Стежування на мапі">
+            <IconButton
+              color="secondary"
+              onClick={() => navigate(`/live/driver/${params.id as string}`)}
+            >
+              <GpsFixed />
+            </IconButton>
+          </Tooltip>
           <IconButton color="primary" onClick={() => handleOpen(params.row)}>
             <Edit />
           </IconButton>

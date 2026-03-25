@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { View, StyleSheet, Text, ActivityIndicator, useWindowDimensions } from 'react-native';
+import { View, StyleSheet, Text, ActivityIndicator, useWindowDimensions, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from 'react-native-paper';
 import io, { Socket } from 'socket.io-client';
 import api, { API_BASE } from '../api/axios';
+import { shortOrderAddress } from '../utils/shortOrderAddress';
 import { OrderTrackingMap, TrackingPhase } from '../components/OrderTrackingMap';
 
 interface Order {
@@ -49,6 +50,14 @@ export const OrderTrackingScreen = ({ navigation, route }: OrderTrackingScreenPr
       const { data } = await api.get(`/orders/${orderId}`);
       const o = data as Order;
       setOrder(o);
+      if (
+        o?.driver?.currentLat != null &&
+        o.driver.currentLng != null &&
+        Number.isFinite(o.driver.currentLat) &&
+        Number.isFinite(o.driver.currentLng)
+      ) {
+        setDriverPos({ lat: o.driver.currentLat, lng: o.driver.currentLng });
+      }
       if (o?.driver?.id && socketRef.current) {
         socketRef.current.emit('join_room', `driver_tracking_${o.driver.id}`);
       }
@@ -121,6 +130,10 @@ export const OrderTrackingScreen = ({ navigation, route }: OrderTrackingScreenPr
 
   useEffect(() => {
     if (!order) return;
+    if (order.status === 'CANCELLED') {
+      setRouteCoords([]);
+      return;
+    }
 
     const phase: TrackingPhase =
       order.status === 'IN_PROGRESS' || order.status === 'COMPLETED' ? 'to_dropoff' : 'to_pickup';
@@ -135,6 +148,25 @@ export const OrderTrackingScreen = ({ navigation, route }: OrderTrackingScreenPr
     const to = phase === 'to_pickup' ? { lat: order.pickupLat, lng: order.pickupLng } : { lat: order.dropoffLat, lng: order.dropoffLng };
     fetchRoute(from, to);
   }, [order, driverPos, fetchRoute]);
+
+  const cancelOrder = useCallback(() => {
+    if (!orderId) return;
+    Alert.alert('Скасувати замовлення?', 'Після скасування замовлення буде закрито.', [
+      { text: 'Ні', style: 'cancel' },
+      {
+        text: 'Скасувати',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await api.put(`/orders/${orderId}`, { status: 'CANCELLED' });
+            await fetchOrder();
+          } catch (e) {
+            Alert.alert('Помилка', (e as Error).message);
+          }
+        },
+      },
+    ]);
+  }, [orderId, fetchOrder]);
 
   if (!orderId) {
     return (
@@ -199,12 +231,18 @@ export const OrderTrackingScreen = ({ navigation, route }: OrderTrackingScreenPr
             </Text>
           )}
           <Text style={styles.addressLabel}>Підбір</Text>
-          <Text style={styles.address}>{order.pickupAddress}</Text>
+          <Text style={styles.address}>{shortOrderAddress(order.pickupAddress)}</Text>
           <Text style={styles.addressLabel}>Висадка</Text>
-          <Text style={styles.address}>{order.dropoffAddress}</Text>
+          <Text style={styles.address}>{shortOrderAddress(order.dropoffAddress)}</Text>
           <Text style={styles.price}>{String(order.totalPrice)} грн</Text>
 
-          {order.status === 'COMPLETED' && (
+          {['SEARCHING', 'ACCEPTED', 'ARRIVED'].includes(order.status) && (
+            <Button mode="outlined" textColor="#b71c1c" onPress={cancelOrder} style={styles.button}>
+              Скасувати замовлення
+            </Button>
+          )}
+
+          {(order.status === 'COMPLETED' || order.status === 'CANCELLED') && (
             <Button
               mode="contained"
               onPress={() => navigation.navigate('Order', { screen: 'CreateOrder' })}

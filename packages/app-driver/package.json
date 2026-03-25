@@ -3,10 +3,10 @@
   "version": "1.0.0",
   "main": "index.ts",
   "scripts": {
-    "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
-    "web": "expo start --web"
+    "start": "expo start --port 8082 --offline",
+    "android": "expo start --android --port 8082 --offline",
+    "ios": "expo start --ios --port 8082 --offline",
+    "web": "expo start --web --port 8082 --offline"
   },
   "dependencies": {
     "@expo-google-fonts/montserrat": "^0.2.3",

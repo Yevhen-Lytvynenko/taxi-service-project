@@ -12,6 +12,7 @@ import { Button } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import io, { Socket } from 'socket.io-client';
 import api, { API_BASE } from '../api/axios';
+import { shortOrderAddress } from '../utils/shortOrderAddress';
 import { CheckeredStrip } from '../components/CheckeredStrip';
 import { colors, spacing, radius, typography } from '../theme';
 
@@ -83,6 +84,12 @@ export const OrdersQueueScreen = ({ navigation }: OrdersQueueScreenProps) => {
       });
     });
 
+    socket.on('order_cancelled', (payload: { orderId?: string }) => {
+      const oid = payload?.orderId;
+      if (!oid) return;
+      setOrders((prev) => prev.filter((o) => o.id !== oid));
+    });
+
     return () => {
       socket.disconnect();
       socketRef.current = null;
@@ -127,14 +134,14 @@ export const OrdersQueueScreen = ({ navigation }: OrdersQueueScreenProps) => {
           <MaterialCommunityIcons name="map-marker" size={18} color={colors.primary} style={styles.addrIcon} />
           <View style={styles.addrBlock}>
             <Text style={styles.addressLabel}>Звідки</Text>
-            <Text style={styles.address}>{item.pickupAddress}</Text>
+            <Text style={styles.address}>{shortOrderAddress(item.pickupAddress)}</Text>
           </View>
         </View>
         <View style={styles.addressRow}>
           <MaterialCommunityIcons name="map-marker-check" size={18} color={colors.primary} style={styles.addrIcon} />
           <View style={styles.addrBlock}>
             <Text style={styles.addressLabel}>Куди</Text>
-            <Text style={styles.address}>{item.dropoffAddress}</Text>
+            <Text style={styles.address}>{shortOrderAddress(item.dropoffAddress)}</Text>
           </View>
         </View>
         <View style={styles.priceRow}>

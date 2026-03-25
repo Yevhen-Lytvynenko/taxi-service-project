@@ -11,7 +11,8 @@ import { Employees } from './pages/Employees';
 import { Transactions } from './pages/Transactions';
 import { Reviews } from './pages/Reviews';
 import { Locations } from './pages/Locations';
-import { LiveMonitoringMap }   from './pages/LiveMonitoringMap';
+import { LiveMonitoringMap } from './pages/LiveMonitoringMap';
+import { DriverTrackingPage } from './pages/DriverTrackingPage';
 
 function App() {
   return (
@@ -30,6 +31,7 @@ function App() {
            <Route path="/reviews" element={<Reviews />} />
            <Route path="/locations" element={<Locations />} />
            <Route path="/tariffs" element={<Tariffs />} />
+           <Route path="/live/driver/:driverId" element={<DriverTrackingPage />} />
            <Route path="/live" element={<LiveMonitoringMap />} />
         </Route>
 

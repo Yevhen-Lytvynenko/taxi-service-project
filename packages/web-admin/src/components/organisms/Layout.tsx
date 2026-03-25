@@ -70,7 +70,10 @@ export const Layout = () => {
             return <Divider key={index} sx={{ my: 1 }} />;
           }
 
-          const isActive = location.pathname === item.path;
+          const isActive =
+            item.path === '/live'
+              ? location.pathname === '/live' || location.pathname.startsWith('/live/')
+              : location.pathname === item.path;
 
           return (
             <ListItem key={item.text} disablePadding sx={{ mb: 0.5 }}>

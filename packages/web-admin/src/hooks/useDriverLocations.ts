@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import io from 'socket.io-client';
+import api from '../api/axios';
 import type { Driver } from '../types/map.types';
 
 function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -42,13 +43,22 @@ function isPlausibleJump(distKm: number, dtMs: number): boolean {
   return false;
 }
 
-export function useDriverLocations() {
+export type UseDriverLocationsOptions = {
+  /** Якщо задано — у стані лише цей водій (для сторінки стеження). */
+  onlyDriverId?: string;
+};
+
+export function useDriverLocations(options?: UseDriverLocationsOptions) {
+  const onlyDriverId = options?.onlyDriverId;
   const [drivers, setDrivers] = useState<Record<string, DriverWithDisplay>>({});
   const prevPositionsRef = useRef<Record<string, { lat: number; lng: number }>>({});
   const lastEventTimeRef = useRef<Record<string, number>>({});
 
   const applySocketUpdate = useCallback((data: Record<string, unknown> & { driverId: string; lat: number; lng: number }) => {
     const { driverId, lat, lng } = data;
+    if (onlyDriverId && driverId !== onlyDriverId) {
+      return;
+    }
     if (typeof lat !== 'number' || typeof lng !== 'number' || Number.isNaN(lat) || Number.isNaN(lng)) {
       return;
     }
@@ -94,7 +104,47 @@ export function useDriverLocations() {
       };
       return { ...prev, [driverId]: next };
     });
-  }, []);
+  }, [onlyDriverId]);
+
+  useEffect(() => {
+    if (!onlyDriverId) return;
+    setDrivers({});
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: d } = await api.get<{
+          currentLat?: number | null;
+          currentLng?: number | null;
+          status?: string;
+          user?: { fullName?: string };
+          vehicle?: { model?: string };
+        }>(`/drivers/${onlyDriverId}`);
+        if (cancelled || d?.currentLat == null || d?.currentLng == null) return;
+        const lat = d.currentLat;
+        const lng = d.currentLng;
+        setDrivers({
+          [onlyDriverId]: {
+            driverId: onlyDriverId,
+            name: d.user?.fullName ?? '—',
+            status: String(d.status ?? 'offline').toLowerCase(),
+            lat,
+            lng,
+            carModel: d.vehicle?.model ?? '—',
+            updatedAt: new Date().toISOString(),
+            displayLat: lat,
+            displayLng: lng,
+            displayHeading: 0,
+          },
+        });
+        prevPositionsRef.current[onlyDriverId] = { lat, lng };
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [onlyDriverId]);
 
   useEffect(() => {
     const socket = io(getSocketUrl(), { transports: ['websocket', 'polling'] });
