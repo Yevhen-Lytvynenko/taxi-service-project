@@ -3,6 +3,7 @@ import { AuthService } from '../services/auth.service';
 import { UserService } from '../services/user.service';
 import { DriverService } from '../services/driver.service';
 import { VehicleService } from '../services/vehicle.service';
+import { clientIp, writeAuditLog } from '../services/audit.service';
 
 const authService = new AuthService();
 const userService = new UserService();
@@ -13,7 +14,6 @@ export class AuthController {
   async login(req: Request, res: Response) {
     try {
       const { username, phone, password } = req.body;
-      console.log('[auth] login body:', { username, phone, hasPassword: !!password });
       if (!password) {
         return res.status(400).json({ error: 'Password is required' });
       }
@@ -24,6 +24,16 @@ export class AuthController {
         result = await authService.login(phone, password);
       } else {
         return res.status(400).json({ error: 'Username or phone is required' });
+      }
+      const officeRoles = ['ADMIN', 'MANAGER', 'ACCOUNTANT', 'DISPATCHER'];
+      if (officeRoles.includes(String(result.user.role))) {
+        void writeAuditLog({
+          userId: result.user.id,
+          action: 'LOGIN_SUCCESS',
+          entity: 'Auth',
+          metadata: { via: username ? 'username' : 'phone' },
+          ip: clientIp(req),
+        });
       }
       res.json(result);
     } catch (error: any) {
@@ -83,8 +93,7 @@ export class AuthController {
 
   async getMe(req: Request, res: Response) {
     try {
-      // @ts-ignore
-      const { id } = req.user;
+      const { id } = req.user!;
       const user = await authService.getProfile(id);
       if (!user) {
         return res.status(404).json({ error: 'User not found' });
@@ -92,6 +101,23 @@ export class AuthController {
       res.json(user);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
+    }
+  }
+
+  async updatePushToken(req: Request, res: Response) {
+    try {
+      const { id } = req.user!;
+      const { pushToken } = req.body as { pushToken?: string | null };
+      if (pushToken === undefined) {
+        return res.status(400).json({ error: 'pushToken is required (string to set, null to clear)' });
+      }
+      if (pushToken !== null && typeof pushToken !== 'string') {
+        return res.status(400).json({ error: 'pushToken must be a string or null' });
+      }
+      const user = await authService.updatePushToken(id, pushToken);
+      res.json(user);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
     }
   }
 }

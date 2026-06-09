@@ -12,4 +12,11 @@ router.patch(
   controller.updateStatus.bind(controller)
 );
 
+router.get(
+  '/me/earnings',
+  authMiddleware,
+  roleMiddleware(['DRIVER']),
+  controller.getMyEarnings.bind(controller)
+);
+
 export default router;

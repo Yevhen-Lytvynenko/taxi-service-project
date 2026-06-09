@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 
+/** Taxi-style checkered accent strip */
 export function CheckeredStrip({ height = 6 }: { height?: number }) {
   const size = height;
   const cols = 20;
@@ -32,8 +33,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
   },
-  row: { flexDirection: 'row' },
-  cell: {},
-  cellBlack: { backgroundColor: '#1a1a1a' },
-  cellWhite: { backgroundColor: '#ffffff' },
+  row: {
+    flexDirection: 'row',
+  },
+  cell: {
+    backgroundColor: '#1a1a1a',
+  },
+  cellBlack: {
+    backgroundColor: '#1a1a1a',
+  },
+  cellWhite: {
+    backgroundColor: '#ffffff',
+  },
 });

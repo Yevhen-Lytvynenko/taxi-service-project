@@ -1,52 +1,71 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Box,
   Button,
-  Typography,
-  Paper,
-  IconButton,
   Dialog,
-  DialogTitle,
-  DialogContent,
   DialogActions,
+  DialogContent,
+  DialogTitle,
   TextField,
 } from '@mui/material';
-import { DataGrid, type GridColDef } from '@mui/x-data-grid';
-import { Edit, Delete, Add } from '@mui/icons-material';
+import type { GridColDef } from '@mui/x-data-grid';
 import { useForm } from 'react-hook-form';
 import api from '../api/axios';
+import { AppDataGrid } from '../components/organisms/AppDataGrid';
+import { buildRowActionsColumn } from '../components/organisms/gridActions';
+
+type ClientRow = {
+  id: string;
+  fullName: string;
+  phone: string;
+  email?: string;
+  ordersCount: number;
+};
+
+type ClientFormValues = {
+  fullName: string;
+  phone: string;
+  email?: string;
+};
 
 export const Clients = () => {
-  const [rows, setRows] = useState<any[]>([]);
+  const [rows, setRows] = useState<ClientRow[]>([]);
+  const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
-  const { register, handleSubmit, reset, setValue } = useForm();
+  const { register, handleSubmit, reset, setValue } = useForm<ClientFormValues>();
 
-  const fetchClients = async () => {
+  const fetchClients = useCallback(async () => {
+    setLoading(true);
     try {
       const res = await api.get('/users');
-      const clients = (res.data || [])
-        .filter((u: any) => u.role === 'CLIENT')
-        .map((u: any) => ({
-          ...u,
+      const clients: ClientRow[] = ((res.data as Array<Record<string, unknown>>) ?? [])
+        .filter((u) => u.role === 'CLIENT')
+        .map((u) => ({
+          id: String(u.id),
+          fullName: String(u.fullName ?? ''),
+          phone: String(u.phone ?? ''),
+          email: u.email ? String(u.email) : undefined,
           ordersCount: Array.isArray(u.clientOrders) ? u.clientOrders.length : 0,
         }));
       setRows(clients);
     } catch (error) {
       console.error(error);
+    } finally {
+      setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    fetchClients();
   }, []);
 
-  const handleOpen = (client?: any) => {
+  useEffect(() => {
+    void fetchClients();
+  }, [fetchClients]);
+
+  const handleOpen = (client?: ClientRow) => {
     if (client) {
       setEditId(client.id);
       setValue('fullName', client.fullName);
       setValue('phone', client.phone);
-      setValue('email', client.email);
+      setValue('email', client.email ?? '');
     } else {
       setEditId(null);
       reset({ fullName: '', phone: '', email: '' });
@@ -55,13 +74,16 @@ export const Clients = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (window.confirm('Видалити клієнта?')) {
+    if (!window.confirm('Видалити клієнта?')) return;
+    try {
       await api.delete(`/users/${id}`);
-      fetchClients();
+      void fetchClients();
+    } catch {
+      alert('Помилка видалення клієнта');
     }
   };
 
-  const onSubmit = async (data: any) => {
+  const onSubmit = async (data: ClientFormValues) => {
     try {
       if (editId) {
         await api.put(`/users/${editId}`, { ...data, role: 'CLIENT' });
@@ -69,57 +91,42 @@ export const Clients = () => {
         await api.post('/users', { ...data, role: 'CLIENT', password: 'password123' });
       }
       setOpen(false);
-      fetchClients();
-    } catch (error) {
+      void fetchClients();
+    } catch {
       alert('Помилка збереження');
     }
   };
 
-  const columns: GridColDef[] = [
-    { field: 'fullName', headerName: 'ПІБ', flex: 1 },
-    { field: 'phone', headerName: 'Телефон', flex: 1 },
-    { field: 'email', headerName: 'Email', flex: 1 },
-    { field: 'ordersCount', headerName: 'Замовлень', width: 120 },
-    {
-      field: 'actions',
-      headerName: 'Дії',
-      width: 120,
-      renderCell: (params) => (
-        <Box>
-          <IconButton color="primary" onClick={() => handleOpen(params.row)}>
-            <Edit />
-          </IconButton>
-          <IconButton color="error" onClick={() => handleDelete(params.id as string)}>
-            <Delete />
-          </IconButton>
-        </Box>
-      ),
-    },
+  const columns: GridColDef<ClientRow>[] = [
+    { field: 'fullName', headerName: 'ПІБ', flex: 1, minWidth: 180 },
+    { field: 'phone', headerName: 'Телефон', flex: 1, minWidth: 140 },
+    { field: 'email', headerName: 'Email', flex: 1, minWidth: 180 },
+    { field: 'ordersCount', headerName: 'Замовлень', width: 120, type: 'number' },
+    buildRowActionsColumn<ClientRow>({
+      onEdit: handleOpen,
+      onDelete: handleDelete,
+    }),
   ];
 
   return (
-    <Box>
-      <Box display="flex" justifyContent="space-between" mb={2}>
-        <Typography variant="h4">Клієнти</Typography>
-        <Button variant="contained" startIcon={<Add />} onClick={() => handleOpen()}>
-          Додати
-        </Button>
-      </Box>
-      <Paper sx={{ height: 600, width: '100%' }}>
-        <DataGrid
-          rows={rows}
-          columns={columns}
-          initialState={{ pagination: { paginationModel: { pageSize: 10 } } }}
-          pageSizeOptions={[5, 10, 25]}
-          disableRowSelectionOnClick
-        />
-      </Paper>
+    <>
+      <AppDataGrid<ClientRow>
+        storageKey="clients"
+        rows={rows}
+        columns={columns}
+        loading={loading}
+        title="Клієнти"
+        subtitle="Користувачі з роллю CLIENT"
+        onCreate={() => handleOpen()}
+        onRefresh={() => void fetchClients()}
+        exportFileName="clients"
+      />
 
-      <Dialog open={open} onClose={() => setOpen(false)}>
+      <Dialog open={open} onClose={() => setOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>{editId ? 'Редагувати клієнта' : 'Новий клієнт'}</DialogTitle>
         <form onSubmit={handleSubmit(onSubmit)}>
           <DialogContent>
-            <Box display="flex" flexDirection="column" gap={2} minWidth={300}>
+            <Box display="flex" flexDirection="column" gap={2}>
               <TextField label="ПІБ" {...register('fullName')} fullWidth required />
               <TextField label="Телефон" {...register('phone')} fullWidth required />
               <TextField label="Email" {...register('email')} fullWidth />
@@ -133,6 +140,6 @@ export const Clients = () => {
           </DialogActions>
         </form>
       </Dialog>
-    </Box>
+    </>
   );
 };

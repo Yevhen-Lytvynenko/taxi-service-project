@@ -1,6 +1,5 @@
-import { PrismaClient, Prisma } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { Prisma } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 
 export class DriverService {
   async create(data: Prisma.DriverProfileCreateInput) {
@@ -38,7 +37,7 @@ export class DriverService {
         vehicle: true,
         driverOrders: true,
         transactions: true,
-        receivedReviews: true,
+        reviews: true,
         locationLogs: {
           take: 1,
           orderBy: { timestamp: 'desc' }

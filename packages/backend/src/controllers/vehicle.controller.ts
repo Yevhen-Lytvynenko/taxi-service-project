@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { VehicleService } from '../services/vehicle.service';
+import { isStaffRole } from '../middleware/authorize.middleware';
 
 const vehicleService = new VehicleService();
 
@@ -24,8 +25,16 @@ export class VehicleController {
 
   async getOne(req: Request, res: Response) {
     try {
+      const user = req.user;
+      if (!user) {
+        return res.status(401).json({ error: 'Authentication required' });
+      }
       const vehicle = await vehicleService.findById(req.params.id as string);
       if (!vehicle) return res.status(404).json({ error: 'Vehicle not found' });
+      const ownerUserId = vehicle.driver?.user?.id;
+      if (!isStaffRole(user.role) && ownerUserId !== user.id) {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
       res.json(vehicle);
     } catch (error: any) {
       res.status(500).json({ error: error.message });

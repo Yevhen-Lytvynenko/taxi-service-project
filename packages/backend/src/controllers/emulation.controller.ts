@@ -1,9 +1,12 @@
 import { Request, Response } from 'express';
-import { PrismaClient, Prisma, OrderStatus } from '@prisma/client';
+import { Prisma, OrderStatus, DriverStatus } from '@prisma/client';
+import { Decimal } from '@prisma/client/runtime/library';
 import { OrderService } from '../services/order.service';
 import { getSocketService } from '../lib/socket';
+import { getPlatformCommissionRate } from '../config/env';
 
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
+
 const orderService = new OrderService();
 
 export async function bootstrap(_req: Request, res: Response) {
@@ -48,7 +51,9 @@ export async function createAndAssignOrder(req: Request, res: Response) {
       return res.status(400).json({ error: 'Driver not found or not ONLINE' });
     }
 
-    const order = await orderService.createFromCoordinates(clientId, pickup, dropoff, 'CASH');
+    const order = await orderService.createFromCoordinates(clientId, pickup, dropoff, {
+      paymentMethod: 'CASH',
+    });
 
     await prisma.$transaction([
       prisma.order.update({
@@ -90,15 +95,53 @@ export async function setOrderSimulationStatus(req: Request, res: Response) {
 
   try {
     const nextStatus = status as OrderStatus;
-    const data: Prisma.OrderUpdateInput = { status: nextStatus };
+
     if (nextStatus === 'IN_PROGRESS') {
-      data.startedAt = new Date();
-    }
-    if (nextStatus === 'COMPLETED') {
-      data.finishedAt = new Date();
+      await orderService.update(id, { status: nextStatus, startedAt: new Date() });
+    } else if (nextStatus === 'COMPLETED') {
+      const existing = await orderService.findById(id);
+      if (!existing) return res.status(404).json({ error: 'Order not found' });
+
+      const total = Number(existing.totalPrice);
+      const rate = getPlatformCommissionRate();
+      const platformFeeNum = Number((total * rate).toFixed(2));
+      const driverEarnNum = Number((total - platformFeeNum).toFixed(2));
+      const platformFee = new Decimal(platformFeeNum);
+      const driverEarn = new Decimal(driverEarnNum);
+
+      const existingTx = await prisma.transaction.findFirst({ where: { orderId: id } });
+
+      await prisma.$transaction(async (tx) => {
+        await tx.order.update({
+          where: { id },
+          data: {
+            status: 'COMPLETED',
+            finishedAt: new Date(),
+            platformFeeAmount: platformFee,
+            driverEarningAmount: driverEarn,
+          },
+        });
+        if (existing.driverId) {
+          await tx.driverProfile.update({
+            where: { id: existing.driverId },
+            data: { status: DriverStatus.ONLINE, balance: { increment: driverEarn } },
+          });
+        }
+        if (!existingTx && existing.driverId) {
+          await tx.transaction.create({
+            data: {
+              driverId: existing.driverId,
+              orderId: id,
+              amount: driverEarn,
+              type: 'ORDER_EARNING',
+            },
+          });
+        }
+      });
+    } else {
+      await orderService.update(id, { status: nextStatus });
     }
 
-    await orderService.update(id, data);
     const full = await orderService.findById(id);
     if (full) {
       getSocketService().notifyAdminOrderUpdate(full);

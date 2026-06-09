@@ -24,6 +24,13 @@
         {
           "locationWhenInUsePermission": "Дозвольте Strum використовувати ваше місцезнаходження для встановлення місця відправлення."
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Дозвольте Strum обирати фото для аватара у профілі.",
+          "cameraPermission": "Дозвольте Strum зробити фото для аватара у профілі."
+        }
       ]
     ],
     "android": {

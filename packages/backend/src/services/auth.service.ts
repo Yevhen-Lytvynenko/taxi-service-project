@@ -1,18 +1,51 @@
-import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import type { Role } from '@prisma/client';
+import { getJwtSecret } from '../config/env';
 
-const prisma = new PrismaClient();
-const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_key_for_diploma';
+import { buildEffectivePermissions } from '../lib/officePermissions';
+import { prisma } from '../lib/prisma';
+import { isOfficeRole } from '../middleware/authorize.middleware';
+
+const userForAuthInclude = {
+  driverProfile: true,
+  employeeProfile: true,
+  officeRole: true,
+} as const;
+
+function jwtPayload(user: {
+  id: string;
+  role: Role;
+  officeRoleId: string | null;
+  driverProfile: { id: string } | null;
+  officeRole: { legacyRole: Role; permissions: unknown } | null;
+}) {
+  const legacyForPerms = (user.officeRole?.legacyRole ?? user.role) as Role;
+  const permsObj = isOfficeRole(user.role)
+    ? legacyForPerms === 'ADMIN'
+      ? buildEffectivePermissions('ADMIN', {})
+      : buildEffectivePermissions(legacyForPerms, user.officeRole?.permissions)
+    : null;
+  const perms =
+    permsObj &&
+    (Object.fromEntries(
+      Object.entries(permsObj) as [string, 'none' | 'read' | 'write'][]
+    ) as Record<string, 'none' | 'read' | 'write'>);
+
+  return {
+    id: user.id,
+    role: user.role,
+    driverId: user.driverProfile?.id,
+    officeRoleId: user.officeRoleId ?? undefined,
+    ...(perms ? { perms } : {}),
+  };
+}
 
 export class AuthService {
   async login(phone: string, password: string) {
     const user = await prisma.user.findUnique({
       where: { phone },
-      include: {
-        driverProfile: true,
-        employeeProfile: true
-      }
+      include: userForAuthInclude,
     });
 
     if (!user) {
@@ -24,31 +57,20 @@ export class AuthService {
       throw new Error('Invalid password');
     }
 
-    const token = jwt.sign(
-      { 
-        id: user.id, 
-        role: user.role,
-        driverId: user.driverProfile?.id 
-      },
-      JWT_SECRET,
-      { expiresIn: '24h' }
-    );
+    const token = jwt.sign(jwtPayload(user), getJwtSecret(), { expiresIn: '24h' });
 
     const { password: _, ...userWithoutPassword } = user;
 
     return {
       token,
-      user: userWithoutPassword
+      user: userWithoutPassword,
     };
   }
 
   async loginByUsername(username: string, password: string) {
     const user = await prisma.user.findUnique({
       where: { username },
-      include: {
-        driverProfile: true,
-        employeeProfile: true
-      }
+      include: userForAuthInclude,
     });
 
     if (!user) {
@@ -60,37 +82,36 @@ export class AuthService {
       throw new Error('Invalid password');
     }
 
-    const token = jwt.sign(
-      {
-        id: user.id,
-        role: user.role,
-        driverId: user.driverProfile?.id
-      },
-      JWT_SECRET,
-      { expiresIn: '24h' }
-    );
+    const token = jwt.sign(jwtPayload(user), getJwtSecret(), { expiresIn: '24h' });
 
     const { password: _, ...userWithoutPassword } = user;
 
     return {
       token,
-      user: userWithoutPassword
+      user: userWithoutPassword,
     };
   }
 
   async getProfile(userId: string) {
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      include: {
-        driverProfile: true,
-        employeeProfile: true
-      }
+      include: userForAuthInclude,
     });
 
     if (!user) {
       return null;
     }
 
+    const { password: _, ...userWithoutPassword } = user;
+    return userWithoutPassword;
+  }
+
+  async updatePushToken(userId: string, pushToken: string | null) {
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data: { pushToken: pushToken || null },
+      include: userForAuthInclude,
+    });
     const { password: _, ...userWithoutPassword } = user;
     return userWithoutPassword;
   }

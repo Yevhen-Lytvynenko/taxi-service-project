@@ -6,7 +6,51 @@
 export interface GeocodeResult {
   lat: number;
   lng: number;
+  /** Повна адреса (Nominatim display_name). */
   displayName: string;
+  /** Скорочений підпис без індексу та країни — для полів у застосунку. */
+  shortLabel: string;
+}
+
+function shortenDisplayName(displayName: string): string {
+  const parts = displayName
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const skip = (p: string) =>
+    /^\d{5}(-\d{4})?$/.test(p) || /україна|ukraine|украина|ukr\b/i.test(p) || /^область\b/i.test(p);
+  const filtered = parts.filter((p) => !skip(p));
+  return filtered.slice(0, 3).join(', ') || displayName;
+}
+
+function nominatimAddressToShortLabel(addr: Record<string, unknown>): string {
+  const a = addr as Record<string, string | undefined>;
+  const road = a.road || a.pedestrian || a.path || '';
+  const hn = a.house_number;
+  let line1 = '';
+  if (road && hn) line1 = `${road}, ${hn}`;
+  else if (road) line1 = road;
+  else line1 = a.amenity || a.building || a.shop || '';
+  const district = a.suburb || a.neighbourhood || a.quarter || a.city_district || '';
+  const city = a.city || a.town || a.village || a.municipality || '';
+  const parts = [line1, district, city].filter((x) => x && String(x).length > 0);
+  return parts.join(' · ');
+}
+
+function enrichFromNominatimItem(item: {
+  display_name?: string;
+  address?: Record<string, unknown>;
+  lat?: string;
+  lon?: string;
+}): { lat: number; lng: number; displayName: string; shortLabel: string } | null {
+  const lat = parseFloat(item.lat ?? '');
+  const lng = parseFloat(item.lon ?? '');
+  if (isNaN(lat) || isNaN(lng)) return null;
+  const displayName = item.display_name ?? `${lat}, ${lng}`;
+  const addr = item.address && typeof item.address === 'object' ? item.address : null;
+  const shortFromAddr = addr ? nominatimAddressToShortLabel(addr) : '';
+  const shortLabel = shortFromAddr || shortenDisplayName(displayName);
+  return { lat, lng, displayName, shortLabel };
 }
 
 const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
@@ -20,6 +64,7 @@ export async function geocodeAddress(address: string): Promise<GeocodeResult | n
     q: address.trim(),
     format: 'json',
     limit: '1',
+    addressdetails: '1',
   });
 
   const res = await fetch(`${NOMINATIM_URL}?${params}`, {
@@ -32,15 +77,11 @@ export async function geocodeAddress(address: string): Promise<GeocodeResult | n
   if (!Array.isArray(data) || data.length === 0) return null;
 
   const item = data[0];
-  const lat = parseFloat(item.lat);
-  const lng = parseFloat(item.lon);
-
-  if (isNaN(lat) || isNaN(lng)) return null;
-
+  const enriched = enrichFromNominatimItem(item);
+  if (!enriched) return null;
   return {
-    lat,
-    lng,
-    displayName: item.display_name || address,
+    ...enriched,
+    displayName: enriched.displayName || address,
   };
 }
 
@@ -52,6 +93,7 @@ export async function reverseGeocode(
     lat: String(lat),
     lon: String(lng),
     format: 'json',
+    addressdetails: '1',
   });
 
   const res = await fetch(`${NOMINATIM_REVERSE_URL}?${params}`, {
@@ -63,15 +105,9 @@ export async function reverseGeocode(
   const item = await res.json();
   if (!item || item.error) return null;
 
-  const resultLat = parseFloat(item.lat);
-  const resultLng = parseFloat(item.lon);
-  if (isNaN(resultLat) || isNaN(resultLng)) return null;
-
-  return {
-    lat: resultLat,
-    lng: resultLng,
-    displayName: item.display_name || `${lat}, ${lng}`,
-  };
+  const enriched = enrichFromNominatimItem(item);
+  if (!enriched) return null;
+  return enriched;
 }
 
 /**

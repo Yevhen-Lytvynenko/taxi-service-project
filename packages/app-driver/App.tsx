@@ -21,6 +21,12 @@ import api, { setOnUnauthorized } from './src/api/axios';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { RegisterDriverScreen } from './src/screens/RegisterDriverScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
+import { TripHistoryScreen } from './src/screens/TripHistoryScreen';
+import { ReviewsAboutMeScreen } from './src/screens/ReviewsAboutMeScreen';
+import { ContactsScreen } from './src/screens/ContactsScreen';
+import { DriverEarningsScreen } from './src/screens/DriverEarningsScreen';
+import { SavedRoutesScreen } from './src/screens/SavedRoutesScreen';
+import { EditProfileScreen } from './src/screens/EditProfileScreen';
 import { OrdersQueueScreen } from './src/screens/OrdersQueueScreen';
 import { ActiveOrderScreen } from './src/screens/ActiveOrderScreen';
 
@@ -28,19 +34,65 @@ const strumTheme = {
   ...MD3LightTheme,
   colors: {
     ...MD3LightTheme.colors,
-    primary: '#ffd451',
+    primary: '#FFDD2D',
     onPrimary: '#1a1a1a',
-    background: '#f5f5f5',
-    surface: '#ffffff',
+    background: '#FFFFFF',
+    surface: '#FFFFFF',
     onSurface: '#1a1a1a',
-    placeholder: '#888888',
+    placeholder: '#8E8E93',
   },
-  roundness: 12,
+  roundness: 14,
 };
 
 const AuthStack = createNativeStackNavigator();
 const MainStack = createNativeStackNavigator();
+const ProfileStack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
+
+function ProfileFlow({ onLogout }: { onLogout: () => void }) {
+  return (
+    <ProfileStack.Navigator
+      screenOptions={{
+        headerTintColor: '#1a1a1a',
+        headerTitleStyle: { fontFamily: 'Montserrat_600SemiBold' },
+      }}
+    >
+      <ProfileStack.Screen name="ProfileMain" options={{ headerShown: false }}>
+        {() => <ProfileScreen onLogout={onLogout} />}
+      </ProfileStack.Screen>
+      <ProfileStack.Screen
+        name="DriverEarnings"
+        component={DriverEarningsScreen}
+        options={{ title: 'Дохід' }}
+      />
+      <ProfileStack.Screen
+        name="SavedRoutes"
+        component={SavedRoutesScreen}
+        options={{ title: 'Збережені маршрути' }}
+      />
+      <ProfileStack.Screen
+        name="TripHistory"
+        component={TripHistoryScreen}
+        options={{ title: 'Історія поїздок' }}
+      />
+      <ProfileStack.Screen
+        name="ReviewsAboutMe"
+        component={ReviewsAboutMeScreen}
+        options={{ title: 'Відгуки про мене' }}
+      />
+      <ProfileStack.Screen
+        name="Contacts"
+        component={ContactsScreen}
+        options={{ title: 'Обране та блоки' }}
+      />
+      <ProfileStack.Screen
+        name="EditProfile"
+        component={EditProfileScreen}
+        options={{ title: 'Редагування профілю' }}
+      />
+    </ProfileStack.Navigator>
+  );
+}
 
 function OrderStack() {
   return (
@@ -54,12 +106,20 @@ function OrderStack() {
 type ScreenProps = { navigation: unknown; route: unknown };
 
 export default function App() {
-  const [fontsLoaded] = useFonts({
+  /** Google Fonts тягнуться з мережі; без CDN завантаження може «висіти» — тоді застрягав весь додаток. */
+  const [fontsTimedOut, setFontsTimedOut] = useState(false);
+  useEffect(() => {
+    const id = setTimeout(() => setFontsTimedOut(true), 5000);
+    return () => clearTimeout(id);
+  }, []);
+
+  const [fontsLoaded, fontError] = useFonts({
     Montserrat_400Regular,
     Montserrat_500Medium,
     Montserrat_600SemiBold,
     Montserrat_700Bold,
   });
+  const fontsReady = fontsLoaded || fontError != null || fontsTimedOut;
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
@@ -81,9 +141,13 @@ export default function App() {
       try {
         await api.get('/auth/me');
         setIsAuthenticated(true);
-      } catch {
-        await AsyncStorage.removeItem('token');
-        await AsyncStorage.removeItem('user');
+      } catch (e: unknown) {
+        const status = (e as { response?: { status?: number } })?.response?.status;
+        if (status === 401) {
+          await AsyncStorage.removeItem('token');
+          await AsyncStorage.removeItem('user');
+        }
+        /* Таймаут / немає мережі: не відкриваємо головний екран з невалідною сесією. */
       } finally {
         setIsLoading(false);
       }
@@ -97,12 +161,12 @@ export default function App() {
     return () => setOnUnauthorized(null);
   }, [handleLogout]);
 
-  if (!fontsLoaded || isLoading) {
+  if (!fontsReady || isLoading) {
     return (
       <SafeAreaProvider>
         <PaperProvider theme={strumTheme}>
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#ffd451" />
+            <ActivityIndicator size="large" color="#FFDD2D" />
           </View>
         </PaperProvider>
       </SafeAreaProvider>
@@ -117,10 +181,15 @@ export default function App() {
             <Tab.Navigator
               screenOptions={{
                 headerShown: false,
-                tabBarActiveTintColor: '#ffd451',
-                tabBarInactiveTintColor: '#888',
-                tabBarStyle: { backgroundColor: '#ffffff', borderTopColor: '#e0e0e0' },
-                tabBarLabelStyle: { fontSize: 12, fontFamily: 'Montserrat_500Medium' },
+                tabBarShowLabel: false,
+                tabBarActiveTintColor: '#1a1a1a',
+                tabBarInactiveTintColor: '#8E8E93',
+                tabBarStyle: {
+                  backgroundColor: '#FFFFFF',
+                  borderTopColor: '#E5E5EA',
+                  height: 54,
+                  paddingTop: 6,
+                },
               }}
             >
               <Tab.Screen
@@ -129,25 +198,21 @@ export default function App() {
                 options={{
                   title: 'Замовлення',
                   tabBarIcon: ({ color, size }) => (
-                    <MaterialCommunityIcons name="clipboard-list-outline" size={size} color={color} />
+                    <MaterialCommunityIcons name="format-list-bulleted" size={size + 2} color={color} />
                   ),
                 }}
               />
               <Tab.Screen
                 name="Profile"
                 options={{
-                  title: 'Профіль',
+                  title: 'Меню',
+                  headerShown: false,
                   tabBarIcon: ({ color, size }) => (
-                    <MaterialCommunityIcons name="account" size={size} color={color} />
+                    <MaterialCommunityIcons name="menu" size={size + 2} color={color} />
                   ),
                 }}
               >
-                {(props: ScreenProps) => (
-                  <ProfileScreen
-                    navigation={props.navigation as { navigate: (name: string) => void }}
-                    onLogout={handleLogout}
-                  />
-                )}
+                {() => <ProfileFlow onLogout={handleLogout} />}
               </Tab.Screen>
             </Tab.Navigator>
           ) : (
@@ -171,6 +236,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#FFFFFF',
   },
 });

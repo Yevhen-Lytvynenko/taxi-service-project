@@ -4,24 +4,38 @@
  * Runs in background, triggered by POST /api/orders/:id/simulate.
  */
 
-import { PrismaClient, DriverStatus } from '@prisma/client';
+import { DriverStatus } from '@prisma/client';
 import { clampToOdessaDriveBounds } from '../data/odessa-addresses';
 import { getSocketService } from '../lib/socket';
 import { OrderService } from './order.service';
 
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
+
 const orderService = new OrderService();
 const OSRM_BASE = 'https://router.project-osrm.org/route/v1/driving';
 
-/** Інтервал між точками на маршруті (мс). Демо до клієнта — швидше; до висадки — спокійніше. */
+/** Інтервал між точками на маршруті (мс). За замовчуванням швидше для демо; перевизначте через env. */
 const STEP_MS_DEFAULT =
-  Number(process.env.ORDER_SIM_STEP_MS) > 0 ? Number(process.env.ORDER_SIM_STEP_MS) : 2500;
+  Number(process.env.ORDER_SIM_STEP_MS) > 0 ? Number(process.env.ORDER_SIM_STEP_MS) : 600;
 const STEP_MS_TO_PICKUP =
   Number(process.env.ORDER_SIM_TO_PICKUP_STEP_MS) > 0
     ? Number(process.env.ORDER_SIM_TO_PICKUP_STEP_MS)
-    : 750;
+    : 350;
 
 const runningSimulations = new Set<string>();
+
+/** Parse saved [lng, lat][] polyline to {lat, lng}[] for driving. */
+function parseSavedPolyline(raw: unknown): Array<{ lat: number; lng: number }> | null {
+  if (!Array.isArray(raw) || raw.length < 2) return null;
+  const points: Array<{ lat: number; lng: number }> = [];
+  for (const p of raw) {
+    if (Array.isArray(p) && p.length >= 2 && typeof p[0] === 'number' && typeof p[1] === 'number') {
+      const c = clampToOdessaDriveBounds(p[1], p[0]);
+      points.push(c);
+    }
+  }
+  return points.length >= 2 ? points : null;
+}
 
 async function isOrderCancelled(orderId: string): Promise<boolean> {
   const o = await prisma.order.findUnique({
@@ -29,6 +43,32 @@ async function isOrderCancelled(orderId: string): Promise<boolean> {
     select: { status: true },
   });
   return o?.status === 'CANCELLED';
+}
+
+const SECOND_LEG_POLL_MS = 500;
+
+/** Wait until trip to dropoff is allowed: IN_PROGRESS and a stored dropoff polyline (or legacy planned). */
+async function waitForSecondLegPolyline(
+  orderId: string
+): Promise<Array<{ lat: number; lng: number }> | null> {
+  for (;;) {
+    if (await isOrderCancelled(orderId)) return null;
+    const o = await prisma.order.findUnique({
+      where: { id: orderId },
+      select: {
+        status: true,
+        navigationRouteToDropoff: true,
+        plannedRoutePolyline: true,
+      },
+    });
+    if (!o || o.status === 'CANCELLED') return null;
+    const poly =
+      parseSavedPolyline(o.navigationRouteToDropoff) ?? parseSavedPolyline(o.plannedRoutePolyline);
+    if (o.status === 'IN_PROGRESS' && poly && poly.length >= 2) {
+      return poly;
+    }
+    await sleep(SECOND_LEG_POLL_MS);
+  }
 }
 
 async function getRoute(
@@ -105,12 +145,18 @@ export class OrderSimulationService {
         lng = c.lng;
       }
 
+      const savedToPickup = parseSavedPolyline(order.navigationRouteToPickup);
+
       const driveAlong = async (
         from: { lat: number; lng: number },
         to: { lat: number; lng: number },
-        stepMs: number = STEP_MS_DEFAULT
+        stepMs: number = STEP_MS_DEFAULT,
+        polylineOverride?: Array<{ lat: number; lng: number }> | null
       ): Promise<boolean> => {
-        const points = await getRoute(from, to) || interpolate(from, to, 25);
+        const points =
+          polylineOverride ??
+          (await getRoute(from, to)) ??
+          interpolate(from, to, 25);
         for (const p of points) {
           if (await isOrderCancelled(orderId)) {
             return true;
@@ -130,7 +176,8 @@ export class OrderSimulationService {
         const aborted1 = await driveAlong(
           { lat, lng },
           { lat: order.pickupLat, lng: order.pickupLng },
-          STEP_MS_TO_PICKUP
+          STEP_MS_TO_PICKUP,
+          savedToPickup
         );
         if (aborted1 || (await isOrderCancelled(orderId))) {
           return;
@@ -141,54 +188,21 @@ export class OrderSimulationService {
         const updated = await orderService.update(orderId, { status: 'ARRIVED' });
         socket.notifyAdminOrderUpdate(updated);
         socket.notifyOrderStatus(orderId, 'ARRIVED');
+      }
 
-        await sleep(2000);
-        if (await isOrderCancelled(orderId)) {
-          return;
-        }
+      const secondLeg = await waitForSecondLegPolyline(orderId);
+      if (!secondLeg) {
+        return;
+      }
 
-        const u2 = await orderService.update(orderId, {
-          status: 'IN_PROGRESS',
-          startedAt: new Date(),
-        });
-        socket.notifyAdminOrderUpdate(u2);
-        socket.notifyOrderStatus(orderId, 'IN_PROGRESS');
-
-        const aborted2 = await driveAlong(
-          { lat: order.pickupLat, lng: order.pickupLng },
-          { lat: order.dropoffLat, lng: order.dropoffLng },
-          STEP_MS_DEFAULT
-        );
-        if (aborted2 || (await isOrderCancelled(orderId))) {
-          return;
-        }
-      } else if (status === 'ARRIVED') {
-        const u2 = await orderService.update(orderId, {
-          status: 'IN_PROGRESS',
-          startedAt: new Date(),
-        });
-        socket.notifyAdminOrderUpdate(u2);
-        socket.notifyOrderStatus(orderId, 'IN_PROGRESS');
-
-        const aborted = await driveAlong(
-          { lat: order.pickupLat, lng: order.pickupLng },
-          { lat: order.dropoffLat, lng: order.dropoffLng },
-          STEP_MS_DEFAULT
-        );
-        if (aborted || (await isOrderCancelled(orderId))) {
-          return;
-        }
-      } else {
-        lat = order.pickupLat;
-        lng = order.pickupLng;
-        const aborted = await driveAlong(
-          { lat: order.pickupLat, lng: order.pickupLng },
-          { lat: order.dropoffLat, lng: order.dropoffLng },
-          STEP_MS_DEFAULT
-        );
-        if (aborted || (await isOrderCancelled(orderId))) {
-          return;
-        }
+      const aborted2 = await driveAlong(
+        { lat: order.pickupLat, lng: order.pickupLng },
+        { lat: order.dropoffLat, lng: order.dropoffLng },
+        STEP_MS_DEFAULT,
+        secondLeg
+      );
+      if (aborted2 || (await isOrderCancelled(orderId))) {
+        return;
       }
 
       if (await isOrderCancelled(orderId)) {

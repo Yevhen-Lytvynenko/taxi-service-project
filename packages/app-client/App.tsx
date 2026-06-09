@@ -21,6 +21,11 @@ import api, { setOnUnauthorized } from './src/api/axios';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { RegisterScreen } from './src/screens/RegisterScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
+import { TripHistoryScreen } from './src/screens/TripHistoryScreen';
+import { ReviewsAboutMeScreen } from './src/screens/ReviewsAboutMeScreen';
+import { ContactsScreen } from './src/screens/ContactsScreen';
+import { SavedPlacesScreen } from './src/screens/SavedPlacesScreen';
+import { EditProfileScreen } from './src/screens/EditProfileScreen';
 import { CreateOrderScreen } from './src/screens/CreateOrderScreen';
 import { OrderTrackingScreen } from './src/screens/OrderTrackingScreen';
 
@@ -28,19 +33,60 @@ const strumTheme = {
   ...MD3LightTheme,
   colors: {
     ...MD3LightTheme.colors,
-    primary: '#ffd451',
+    primary: '#FFDD2D',
     onPrimary: '#1a1a1a',
-    background: '#f5f5f5',
-    surface: '#ffffff',
+    background: '#FFFFFF',
+    surface: '#FFFFFF',
     onSurface: '#1a1a1a',
-    placeholder: '#888888',
+    placeholder: '#8E8E93',
   },
-  roundness: 12,
+  roundness: 14,
 };
 
 const AuthStack = createNativeStackNavigator();
 const MainStack = createNativeStackNavigator();
+const ProfileStack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
+
+function ProfileFlow({ onLogout }: { onLogout: () => void }) {
+  return (
+    <ProfileStack.Navigator
+      screenOptions={{
+        headerTintColor: '#1a1a1a',
+        headerTitleStyle: { fontFamily: 'Montserrat_600SemiBold' },
+      }}
+    >
+      <ProfileStack.Screen name="ProfileMain" options={{ headerShown: false }}>
+        {() => <ProfileScreen onLogout={onLogout} />}
+      </ProfileStack.Screen>
+      <ProfileStack.Screen
+        name="SavedPlaces"
+        component={SavedPlacesScreen}
+        options={{ title: 'Збережені адреси' }}
+      />
+      <ProfileStack.Screen
+        name="TripHistory"
+        component={TripHistoryScreen}
+        options={{ title: 'Історія поїздок' }}
+      />
+      <ProfileStack.Screen
+        name="ReviewsAboutMe"
+        component={ReviewsAboutMeScreen}
+        options={{ title: 'Відгуки про мене' }}
+      />
+      <ProfileStack.Screen
+        name="Contacts"
+        component={ContactsScreen}
+        options={{ title: 'Обране та блоки' }}
+      />
+      <ProfileStack.Screen
+        name="EditProfile"
+        component={EditProfileScreen}
+        options={{ title: 'Редагування профілю' }}
+      />
+    </ProfileStack.Navigator>
+  );
+}
 
 function OrderStack() {
   return (
@@ -54,12 +100,13 @@ function OrderStack() {
 type ScreenProps = { navigation: unknown; route: unknown };
 
 export default function App() {
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     Montserrat_400Regular,
     Montserrat_500Medium,
     Montserrat_600SemiBold,
     Montserrat_700Bold,
   });
+  const fontsReady = fontsLoaded || fontError != null;
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
@@ -81,9 +128,14 @@ export default function App() {
       try {
         await api.get('/auth/me');
         setIsAuthenticated(true);
-      } catch {
-        await AsyncStorage.removeItem('token');
-        await AsyncStorage.removeItem('user');
+      } catch (e: unknown) {
+        const status = (e as { response?: { status?: number } })?.response?.status;
+        if (status === 401) {
+          await AsyncStorage.removeItem('token');
+          await AsyncStorage.removeItem('user');
+        } else {
+          setIsAuthenticated(true);
+        }
       } finally {
         setIsLoading(false);
       }
@@ -97,12 +149,12 @@ export default function App() {
     return () => setOnUnauthorized(null);
   }, [handleLogout]);
 
-  if (!fontsLoaded || isLoading) {
+  if (!fontsReady || isLoading) {
     return (
       <SafeAreaProvider>
         <PaperProvider theme={strumTheme}>
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#ffd451" />
+            <ActivityIndicator size="large" color="#FFDD2D" />
           </View>
         </PaperProvider>
       </SafeAreaProvider>
@@ -117,44 +169,48 @@ export default function App() {
             <Tab.Navigator
               screenOptions={{
                 headerShown: false,
-                tabBarActiveTintColor: '#ffd451',
-                tabBarInactiveTintColor: '#888',
-                tabBarStyle: { backgroundColor: '#ffffff', borderTopColor: '#e0e0e0' },
-                tabBarLabelStyle: { fontSize: 12, fontFamily: 'Montserrat_500Medium' },
+                tabBarShowLabel: false,
+                tabBarActiveTintColor: '#1a1a1a',
+                tabBarInactiveTintColor: '#8E8E93',
+                tabBarStyle: {
+                  backgroundColor: '#FFFFFF',
+                  borderTopColor: '#E5E5EA',
+                  height: 54,
+                  paddingTop: 6,
+                },
               }}
             >
               <Tab.Screen
                 name="Order"
                 component={OrderStack}
                 options={{
-                  title: 'Замовлення',
-                  tabBarIcon: ({ color, size }) => (
-                    <MaterialCommunityIcons name="car-side" size={size} color={color} />
+                  title: 'Поїздка',
+                  tabBarIcon: ({ color, size }: { color: string; size: number }) => (
+                    <MaterialCommunityIcons name="map-marker-radius" size={size + 2} color={color} />
                   ),
                 }}
               />
               <Tab.Screen
                 name="Profile"
                 options={{
-                  title: 'Профіль',
-                  tabBarIcon: ({ color, size }) => (
-                    <MaterialCommunityIcons name="account" size={size} color={color} />
+                  title: 'Меню',
+                  headerShown: false,
+                  tabBarIcon: ({ color, size }: { color: string; size: number }) => (
+                    <MaterialCommunityIcons name="menu" size={size + 2} color={color} />
                   ),
                 }}
               >
-                {(props: ScreenProps) => (
-                  <ProfileScreen
-                    navigation={props.navigation as { navigate: (name: string) => void }}
-                    onLogout={handleLogout}
-                  />
-                )}
+                {() => <ProfileFlow onLogout={handleLogout} />}
               </Tab.Screen>
             </Tab.Navigator>
           ) : (
             <AuthStack.Navigator screenOptions={{ headerShown: false }}>
               <AuthStack.Screen name="Login">
                 {(props: ScreenProps) => (
-                  <LoginScreen {...props} onLoginSuccess={handleLoginSuccess} />
+                  <LoginScreen
+                    navigation={props.navigation as { navigate: (name: string) => void }}
+                    onLoginSuccess={handleLoginSuccess}
+                  />
                 )}
               </AuthStack.Screen>
               <AuthStack.Screen name="Register" component={RegisterScreen} />
@@ -171,6 +227,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#FFFFFF',
   },
 });

@@ -5,7 +5,7 @@
 
 import { io } from 'socket.io-client';
 import dotenv from 'dotenv';
-import { haversineDistanceKm } from './geo';
+import { destinationPointKm, haversineDistanceKm } from './geo';
 import { getRoute } from './route';
 import { ODESSA_ADDRESSES, clampToOdessaDriveBounds, type OdessaAddress } from './odessa-addresses';
 
@@ -54,21 +54,51 @@ let socket: ReturnType<typeof io> | null = null;
 let activeSimulations = 0;
 let running = true;
 
+const API_MAX_ATTEMPTS = 6;
+const API_RETRY_BASE_MS = 500;
+
+function isTransientNetworkError(e: unknown): boolean {
+  if (!(e instanceof Error)) return false;
+  if (e.message.includes('fetch failed')) return true;
+  const cause = e.cause as { code?: string } | undefined;
+  const code = cause?.code;
+  return (
+    code === 'UND_ERR_CONNECT_TIMEOUT' ||
+    code === 'ECONNREFUSED' ||
+    code === 'ECONNRESET' ||
+    code === 'ETIMEDOUT'
+  );
+}
+
 async function api(path: string, options: RequestInit = {}): Promise<unknown> {
   const url = `${SERVER_URL}/api/emulation${path}`;
-  const res = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Emulation-Secret': EMULATION_SECRET,
-      ...(options.headers as Record<string, string>),
-    },
-  });
-  const text = await res.text();
-  if (!res.ok) {
-    throw new Error(`[gps-simulator] ${path} -> ${res.status} ${text}`);
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= API_MAX_ATTEMPTS; attempt++) {
+    try {
+      const res = await fetch(url, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Emulation-Secret': EMULATION_SECRET,
+          ...(options.headers as Record<string, string>),
+        },
+      });
+      const text = await res.text();
+      if (!res.ok) {
+        throw new Error(`[gps-simulator] ${path} -> ${res.status} ${text}`);
+      }
+      return text ? JSON.parse(text) : {};
+    } catch (e) {
+      lastError = e;
+      const retry = isTransientNetworkError(e) && attempt < API_MAX_ATTEMPTS;
+      if (retry) {
+        await sleep(API_RETRY_BASE_MS * attempt);
+        continue;
+      }
+      throw e;
+    }
   }
-  return text ? JSON.parse(text) : {};
+  throw lastError;
 }
 
 function randomInRange(min: number, max: number): number {
@@ -218,6 +248,7 @@ async function planCruiseRoute(d: DriverState): Promise<void> {
   try {
     const dest = pickCruiseDestination(d.lat, d.lng);
     const raw = await buildRoutePoints({ lat: d.lat, lng: d.lng }, dest);
+    if (d.status !== 'ONLINE') return;
     if (raw.length < 2) {
       d.nextPlanAt = Date.now() + 2500;
       return;
@@ -318,11 +349,19 @@ async function createAndAssignOrder(): Promise<void> {
       { driver: online[0]!, dist: Infinity }
     ).driver;
 
-    const startLat = nearest.lat;
-    const startLng = nearest.lng;
+    const spawnKm = randomInRange(1, 3);
+    const bearing = Math.random() * 360;
+    let spawn = destinationPointKm(pickup.lat, pickup.lng, bearing, spawnKm);
+    spawn = clampToOdessaDriveBounds(spawn.lat, spawn.lng);
+    const startLat = spawn.lat;
+    const startLng = spawn.lng;
 
+    nearest.lat = startLat;
+    nearest.lng = startLng;
     nearest.routePoints = [];
     nearest.routeIndex = 0;
+
+    await setDriverOnlineAfterTrip(nearest.id, startLat, startLng);
 
     const created = (await api('/orders/create-and-assign', {
       method: 'POST',
@@ -349,20 +388,36 @@ async function createAndAssignOrder(): Promise<void> {
       startLng,
       { lat: created.pickupLat, lng: created.pickupLng },
       { lat: created.dropoffLat, lng: created.dropoffLng }
-    );
+    ).catch((err) => {
+      console.error('\n[gps-simulator] trip simulation error:', err);
+      const d = drivers.find((x) => x.id === nearest.id);
+      if (d) {
+        d.status = 'ONLINE';
+        d.routePoints = [];
+        d.routeIndex = 0;
+        d.nextPlanAt = Date.now() + randomInRange(CRUISE_PAUSE_MIN_MS, CRUISE_PAUSE_MAX_MS);
+      }
+    });
     process.stdout.write('o');
   } catch (e) {
     console.error('\n[gps-simulator] create order error:', e);
   }
 }
 
+let orderSchedulerRunning = false;
 function scheduleNextOrder(): void {
   if (!running) return;
-  const delay = randomInRange(ORDER_INTERVAL_MIN_MS, ORDER_INTERVAL_MAX_MS);
-  setTimeout(() => {
-    void createAndAssignOrder();
-    scheduleNextOrder();
-  }, delay);
+  if (orderSchedulerRunning) return;
+  orderSchedulerRunning = true;
+  const tick = () => {
+    if (!running) { orderSchedulerRunning = false; return; }
+    const delay = randomInRange(ORDER_INTERVAL_MIN_MS, ORDER_INTERVAL_MAX_MS);
+    setTimeout(() => {
+      void createAndAssignOrder();
+      tick();
+    }, delay);
+  };
+  tick();
 }
 
 async function cruiseTick(): Promise<void> {

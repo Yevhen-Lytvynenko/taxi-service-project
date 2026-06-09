@@ -1,0 +1,294 @@
+import { Prisma } from '@prisma/client';
+export declare class DriverService {
+    create(data: Prisma.DriverProfileCreateInput): Promise<{
+        user: {
+            id: string;
+            role: import(".prisma/client").$Enums.Role;
+            username: string | null;
+            phone: string;
+            email: string | null;
+            password: string;
+            fullName: string;
+            avatarUrl: string | null;
+            officeRoleId: string | null;
+            rating: number;
+            pushToken: string | null;
+            createdAt: Date;
+            updatedAt: Date;
+        };
+        vehicle: {
+            model: string;
+            id: string;
+            driverId: string;
+            color: string;
+            plateNumber: string;
+            productionYear: number;
+            carClass: import(".prisma/client").$Enums.CarClass;
+            odometerKm: number | null;
+        } | null;
+    } & {
+        id: string;
+        userId: string;
+        licenseNumber: string;
+        status: import(".prisma/client").$Enums.DriverStatus;
+        balance: Prisma.Decimal;
+        currentLat: number | null;
+        currentLng: number | null;
+        lastActive: Date;
+        verificationStatus: import(".prisma/client").$Enums.DriverVerificationStatus;
+    }>;
+    findAll(withLocation?: boolean): Promise<({
+        user: {
+            id: string;
+            role: import(".prisma/client").$Enums.Role;
+            username: string | null;
+            phone: string;
+            email: string | null;
+            password: string;
+            fullName: string;
+            avatarUrl: string | null;
+            officeRoleId: string | null;
+            rating: number;
+            pushToken: string | null;
+            createdAt: Date;
+            updatedAt: Date;
+        };
+        vehicle: {
+            model: string;
+            id: string;
+            driverId: string;
+            color: string;
+            plateNumber: string;
+            productionYear: number;
+            carClass: import(".prisma/client").$Enums.CarClass;
+            odometerKm: number | null;
+        } | null;
+        driverOrders: {
+            id: string;
+            driverId: string | null;
+            createdAt: Date;
+            updatedAt: Date;
+            status: import(".prisma/client").$Enums.OrderStatus;
+            clientId: string;
+            tariffId: string;
+            pickupAddress: string;
+            pickupLat: number;
+            pickupLng: number;
+            dropoffAddress: string;
+            dropoffLat: number;
+            dropoffLng: number;
+            distanceKm: number;
+            totalPrice: Prisma.Decimal;
+            paymentMethod: import(".prisma/client").$Enums.PaymentMethod;
+            surgeMultiplier: number;
+            clientPreferences: Prisma.JsonValue | null;
+            promoCode: string | null;
+            plannedRouteDistanceKm: number | null;
+            plannedRouteDurationMin: number | null;
+            plannedRoutePolyline: Prisma.JsonValue | null;
+            navigationRouteToPickup: Prisma.JsonValue | null;
+            navigationRouteToDropoff: Prisma.JsonValue | null;
+            actualRouteDistanceKm: number | null;
+            platformFeeAmount: Prisma.Decimal | null;
+            driverEarningAmount: Prisma.Decimal | null;
+            matchDeadlineAt: Date | null;
+            deliverySenderName: string | null;
+            deliverySenderPhone: string | null;
+            deliveryRecipientName: string | null;
+            deliveryRecipientPhone: string | null;
+            deliveryPayer: import(".prisma/client").$Enums.DeliveryPayer | null;
+            preferredDriverUserId: string | null;
+            dispatcherNotes: string | null;
+            cancelledByRole: import(".prisma/client").$Enums.Role | null;
+            cancellationReason: import(".prisma/client").$Enums.CancellationReason | null;
+            startedAt: Date | null;
+            finishedAt: Date | null;
+        }[];
+    } & {
+        id: string;
+        userId: string;
+        licenseNumber: string;
+        status: import(".prisma/client").$Enums.DriverStatus;
+        balance: Prisma.Decimal;
+        currentLat: number | null;
+        currentLng: number | null;
+        lastActive: Date;
+        verificationStatus: import(".prisma/client").$Enums.DriverVerificationStatus;
+    })[]>;
+    findById(id: string): Promise<({
+        transactions: {
+            id: string;
+            driverId: string;
+            createdAt: Date;
+            orderId: string | null;
+            amount: Prisma.Decimal;
+            type: string;
+        }[];
+        reviews: {
+            id: string;
+            driverId: string | null;
+            rating: number;
+            createdAt: Date;
+            orderId: string;
+            authorId: string;
+            subjectUserId: string;
+            comment: string | null;
+        }[];
+        user: {
+            id: string;
+            role: import(".prisma/client").$Enums.Role;
+            username: string | null;
+            phone: string;
+            email: string | null;
+            password: string;
+            fullName: string;
+            avatarUrl: string | null;
+            officeRoleId: string | null;
+            rating: number;
+            pushToken: string | null;
+            createdAt: Date;
+            updatedAt: Date;
+        };
+        vehicle: {
+            model: string;
+            id: string;
+            driverId: string;
+            color: string;
+            plateNumber: string;
+            productionYear: number;
+            carClass: import(".prisma/client").$Enums.CarClass;
+            odometerKm: number | null;
+        } | null;
+        driverOrders: {
+            id: string;
+            driverId: string | null;
+            createdAt: Date;
+            updatedAt: Date;
+            status: import(".prisma/client").$Enums.OrderStatus;
+            clientId: string;
+            tariffId: string;
+            pickupAddress: string;
+            pickupLat: number;
+            pickupLng: number;
+            dropoffAddress: string;
+            dropoffLat: number;
+            dropoffLng: number;
+            distanceKm: number;
+            totalPrice: Prisma.Decimal;
+            paymentMethod: import(".prisma/client").$Enums.PaymentMethod;
+            surgeMultiplier: number;
+            clientPreferences: Prisma.JsonValue | null;
+            promoCode: string | null;
+            plannedRouteDistanceKm: number | null;
+            plannedRouteDurationMin: number | null;
+            plannedRoutePolyline: Prisma.JsonValue | null;
+            navigationRouteToPickup: Prisma.JsonValue | null;
+            navigationRouteToDropoff: Prisma.JsonValue | null;
+            actualRouteDistanceKm: number | null;
+            platformFeeAmount: Prisma.Decimal | null;
+            driverEarningAmount: Prisma.Decimal | null;
+            matchDeadlineAt: Date | null;
+            deliverySenderName: string | null;
+            deliverySenderPhone: string | null;
+            deliveryRecipientName: string | null;
+            deliveryRecipientPhone: string | null;
+            deliveryPayer: import(".prisma/client").$Enums.DeliveryPayer | null;
+            preferredDriverUserId: string | null;
+            dispatcherNotes: string | null;
+            cancelledByRole: import(".prisma/client").$Enums.Role | null;
+            cancellationReason: import(".prisma/client").$Enums.CancellationReason | null;
+            startedAt: Date | null;
+            finishedAt: Date | null;
+        }[];
+        locationLogs: {
+            id: string;
+            driverId: string;
+            timestamp: Date;
+            orderId: string | null;
+            lat: number;
+            lng: number;
+            speed: number | null;
+        }[];
+    } & {
+        id: string;
+        userId: string;
+        licenseNumber: string;
+        status: import(".prisma/client").$Enums.DriverStatus;
+        balance: Prisma.Decimal;
+        currentLat: number | null;
+        currentLng: number | null;
+        lastActive: Date;
+        verificationStatus: import(".prisma/client").$Enums.DriverVerificationStatus;
+    }) | null>;
+    findByUserId(userId: string): Promise<({
+        user: {
+            id: string;
+            role: import(".prisma/client").$Enums.Role;
+            username: string | null;
+            phone: string;
+            email: string | null;
+            password: string;
+            fullName: string;
+            avatarUrl: string | null;
+            officeRoleId: string | null;
+            rating: number;
+            pushToken: string | null;
+            createdAt: Date;
+            updatedAt: Date;
+        };
+        vehicle: {
+            model: string;
+            id: string;
+            driverId: string;
+            color: string;
+            plateNumber: string;
+            productionYear: number;
+            carClass: import(".prisma/client").$Enums.CarClass;
+            odometerKm: number | null;
+        } | null;
+    } & {
+        id: string;
+        userId: string;
+        licenseNumber: string;
+        status: import(".prisma/client").$Enums.DriverStatus;
+        balance: Prisma.Decimal;
+        currentLat: number | null;
+        currentLng: number | null;
+        lastActive: Date;
+        verificationStatus: import(".prisma/client").$Enums.DriverVerificationStatus;
+    }) | null>;
+    update(id: string, data: Prisma.DriverProfileUpdateInput): Promise<{
+        vehicle: {
+            model: string;
+            id: string;
+            driverId: string;
+            color: string;
+            plateNumber: string;
+            productionYear: number;
+            carClass: import(".prisma/client").$Enums.CarClass;
+            odometerKm: number | null;
+        } | null;
+    } & {
+        id: string;
+        userId: string;
+        licenseNumber: string;
+        status: import(".prisma/client").$Enums.DriverStatus;
+        balance: Prisma.Decimal;
+        currentLat: number | null;
+        currentLng: number | null;
+        lastActive: Date;
+        verificationStatus: import(".prisma/client").$Enums.DriverVerificationStatus;
+    }>;
+    delete(id: string): Promise<{
+        id: string;
+        userId: string;
+        licenseNumber: string;
+        status: import(".prisma/client").$Enums.DriverStatus;
+        balance: Prisma.Decimal;
+        currentLat: number | null;
+        currentLng: number | null;
+        lastActive: Date;
+        verificationStatus: import(".prisma/client").$Enums.DriverVerificationStatus;
+    }>;
+}
+//# sourceMappingURL=driver.service.d.ts.map

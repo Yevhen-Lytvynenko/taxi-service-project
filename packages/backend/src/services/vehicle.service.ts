@@ -1,6 +1,5 @@
-import { PrismaClient, Prisma } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { Prisma } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 
 export class VehicleService {
   async create(data: Prisma.VehicleCreateInput) {
@@ -26,8 +25,8 @@ export class VehicleService {
     return prisma.vehicle.findUnique({
       where: { id },
       include: {
-        driver: true
-      }
+        driver: { include: { user: true } },
+      },
     });
   }
 

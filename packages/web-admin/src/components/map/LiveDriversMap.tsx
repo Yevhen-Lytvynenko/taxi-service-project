@@ -1,6 +1,6 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { Box, Typography } from '@mui/material';
-import { MapContainer, TileLayer, LayerGroup, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, LayerGroup, Polyline, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 
 import { OSM_TILE_URL, OSM_ATTRIBUTION, DEFAULT_CENTER, DEFAULT_ZOOM } from './mapConfig';
@@ -57,10 +57,22 @@ interface LiveDriversMapProps {
   subtitle: string;
   /** Центрувати та наближати при оновленні позиції одного водія */
   followSingleDriver?: boolean;
+  /** Плавна інтерполяція маркера (рекомендовано лише для одного водія — менше onRender) */
+  smoothMarkers?: boolean;
+  /** Маршрут [lat, lng][] поверх карти (напр. активне замовлення) */
+  routePolyline?: Array<[number, number]>;
 }
 
-export function LiveDriversMap({ drivers, subtitle, followSingleDriver }: LiveDriversMapProps) {
+export function LiveDriversMap({
+  drivers,
+  subtitle,
+  followSingleDriver,
+  smoothMarkers,
+  routePolyline,
+}: LiveDriversMapProps) {
   const list = Object.values(drivers) as DriverWithDisplay[];
+  const doSmooth = smoothMarkers ?? !!followSingleDriver;
+  const line = routePolyline && routePolyline.length > 1 ? routePolyline : null;
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 64px)' }}>
@@ -78,8 +90,14 @@ export function LiveDriversMap({ drivers, subtitle, followSingleDriver }: LiveDr
           {followSingleDriver && <MapFollowLatestDriver drivers={list} enabled />}
           <TileLayer attribution={OSM_ATTRIBUTION} url={OSM_TILE_URL} maxZoom={19} />
           <LayerGroup>
+            {line && (
+              <Polyline
+                positions={line}
+                pathOptions={{ color: '#ffd451', weight: 5, opacity: 0.88 }}
+              />
+            )}
             {list.map((driver) => (
-              <DriverMarker key={driver.driverId} driver={driver} />
+              <DriverMarker key={driver.driverId} driver={driver} smooth={doSmooth} />
             ))}
           </LayerGroup>
         </MapContainer>

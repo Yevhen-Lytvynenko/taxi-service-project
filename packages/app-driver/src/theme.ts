@@ -1,34 +1,51 @@
 /**
- * Strum brand design system
+ * Мобільний UI у дусі таксі-додатків (Uklon): білий фон, жовтий акцент, мінімум шуму.
  */
+
 export const colors = {
-  background: '#f5f5f5',
-  surface: '#ffffff',
-  surfaceElevated: '#ffffff',
-  primary: '#ffd451',
-  onPrimary: '#1a1a1a',
-  onBackground: '#1a1a1a',
-  onSurface: '#1a1a1a',
-  onSurfaceMuted: '#666666',
-  border: '#e0e0e0',
-  error: '#ff5252',
+  background: '#FFFFFF',
+  backgroundMuted: '#F2F2F7',
+  surface: '#FFFFFF',
+  surfaceElevated: '#FFFFFF',
+  primary: '#FFDD2D',
+  onPrimary: '#1A1A1A',
+  onBackground: '#1A1A1A',
+  onSurface: '#1A1A1A',
+  onSurfaceMuted: '#8E8E93',
+  border: '#E5E5EA',
+  error: '#FF3B30',
 } as const;
 
 export const spacing = {
   xs: 4,
   sm: 8,
   md: 16,
-  lg: 24,
-  xl: 32,
+  lg: 20,
+  xl: 28,
 } as const;
 
 export const radius = {
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 20,
+  sm: 10,
+  md: 14,
+  lg: 18,
+  xl: 22,
   full: 9999,
 } as const;
+
+/**
+ * Нижня панель над мапою: скруглення + обрізання, щоб фон ScrollView не проступав кутами.
+ */
+export const mapBottomSheet = {
+  backgroundColor: colors.surface,
+  borderTopLeftRadius: radius.lg,
+  borderTopRightRadius: radius.lg,
+  overflow: 'hidden' as const,
+};
+
+/** ScrollView усередині такої панелі — без власного фону. */
+export const mapBottomSheetScroll = {
+  backgroundColor: 'transparent' as const,
+};
 
 export const typography = {
   fontFamily: {
@@ -38,11 +55,11 @@ export const typography = {
     bold: 'Montserrat_700Bold',
   },
   fontSize: {
-    xs: 12,
-    sm: 14,
-    md: 16,
-    lg: 18,
-    xl: 24,
-    xxl: 28,
+    xs: 11,
+    sm: 13,
+    md: 15,
+    lg: 17,
+    xl: 22,
+    xxl: 26,
   },
 } as const;

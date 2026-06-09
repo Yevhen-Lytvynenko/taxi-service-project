@@ -1,11 +1,26 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_URL, API_BASE } from '../config/api';
+import { getApiUrl, getApiBase } from '../config/api';
 
-export { API_BASE };
+export { getApiBase };
 let onUnauthorized: (() => void) | null = null;
 
 export function setOnUnauthorized(callback: (() => void) | null) {
   onUnauthorized = callback;
+}
+
+const REQUEST_TIMEOUT_MS = 15_000;
+
+function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  return fetch(url, { ...init, signal: controller.signal }).finally(() => clearTimeout(id));
+}
+
+function withQuery(path: string, params?: Record<string, string>): string {
+  if (!params || Object.keys(params).length === 0) return path;
+  const q = new URLSearchParams(params).toString();
+  const sep = path.includes('?') ? '&' : '?';
+  return `${path}${sep}${q}`;
 }
 
 async function request(
@@ -21,27 +36,38 @@ async function request(
     headers.Authorization = `Bearer ${token}`;
   }
 
+  const apiUrl = getApiUrl();
   let res: Response;
   try {
-    res = await fetch(`${API_URL}${path}`, {
+    res = await fetchWithTimeout(`${apiUrl}${path}`, {
       method,
       headers,
       body: body ? JSON.stringify(body) : undefined,
     });
   } catch (e) {
+    if (e instanceof Error && e.name === 'AbortError') {
+      throw new Error(
+        `Сервер не відповів за ${REQUEST_TIMEOUT_MS / 1000} с (${apiUrl}). ` +
+          `Перевірте бекенд; у .env можна задати EXPO_PUBLIC_LAN_HOST=ВАШ_IP або EXPO_PUBLIC_API_URL=http://ВАШ_IP:4000/api.`
+      );
+    }
     const hint =
-      `Не вдалося з’єднатися з сервером (${API_URL}). ` +
-      `Для телефону в одній Wi‑Fi створіть packages/app-client/.env з рядком EXPO_PUBLIC_API_URL=http://ВАШ_IP:4000 і перезапустіть Expo.`;
+      `Не вдалося з’єднатися з сервером (${apiUrl}). ` +
+      `У packages/app-client/.env додайте EXPO_PUBLIC_LAN_HOST=ВАШ_IP (браузер на телефоні вже відкриває цей хост) і перезапустіть Expo.`;
     const err = new Error(e instanceof Error && e.message ? `${e.message}. ${hint}` : hint);
     throw err;
   }
 
   let data: unknown;
-  const text = await res.text();
-  try {
-    data = text ? JSON.parse(text) : {};
-  } catch {
-    data = { error: text };
+  if (res.status === 204 || res.status === 205) {
+    data = null;
+  } else {
+    const text = await res.text();
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch {
+      data = { error: text };
+    }
   }
 
   if (res.status === 401) {
@@ -61,9 +87,11 @@ async function request(
 
 // axios-like interface: get/post/put return { data }
 const api = {
-  get: (path: string) => request('GET', path),
+  get: (path: string, init?: { params?: Record<string, string> }) =>
+    request('GET', withQuery(path, init?.params)),
   post: (path: string, body?: object) => request('POST', path, body),
   put: (path: string, body?: object) => request('PUT', path, body),
+  delete: (path: string) => request('DELETE', path),
 };
 
 export default api;

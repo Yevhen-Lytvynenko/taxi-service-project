@@ -9,8 +9,9 @@ import { createApp } from '../src/createApp';
 let app: Express;
 const EMULATION_SECRET = process.env.EMULATION_SECRET || 'emulation_secret';
 
-beforeAll(() => {
-  app = createApp().app;
+beforeAll(async () => {
+  const { app: a } = await createApp();
+  app = a;
 });
 
 describe('GET /api/emulation/bootstrap', () => {

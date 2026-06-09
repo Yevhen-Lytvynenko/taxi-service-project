@@ -5,6 +5,7 @@ import {
   Text,
   TextInput,
   Alert,
+  Image,
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
@@ -92,8 +93,11 @@ export const RegisterDriverScreen = ({ navigation }: RegisterDriverScreenProps) 
     >
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
-          <Text style={styles.title}>Реєстрація водія</Text>
+          <Image source={require('../../assets/Logo.png')} style={styles.logoImage} />
+          <Text style={styles.logo}>Strum</Text>
+          <Text style={styles.appBadge}>Застосунок для водіїв</Text>
           <CheckeredStrip height={6} />
+          <Text style={styles.title}>Реєстрація водія</Text>
         </View>
 
         <View style={styles.form}>
@@ -152,11 +156,31 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { padding: spacing.lg, paddingTop: spacing.xl * 2 },
   header: { alignItems: 'center', marginBottom: spacing.xl },
+  logoImage: {
+    width: 64,
+    height: 96,
+    marginBottom: spacing.sm,
+    resizeMode: 'contain',
+  },
+  logo: {
+    color: colors.primary,
+    fontFamily: typography.fontFamily.bold,
+    fontSize: typography.fontSize.xxl,
+  },
+  appBadge: {
+    color: colors.onSurfaceMuted,
+    fontFamily: typography.fontFamily.medium,
+    fontSize: typography.fontSize.sm,
+    textAlign: 'center',
+    marginTop: spacing.xs,
+    marginBottom: spacing.sm,
+  },
   title: {
     color: colors.onBackground,
     fontFamily: typography.fontFamily.bold,
     fontSize: typography.fontSize.xl,
-    marginBottom: spacing.md,
+    marginTop: spacing.md,
+    textAlign: 'center',
   },
   form: { width: '100%' },
   inputWrapper: {

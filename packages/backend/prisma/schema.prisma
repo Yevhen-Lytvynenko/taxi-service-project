@@ -1,6 +1,7 @@
 generator client {
-  provider = "prisma-client-js"
-  engineType = "library"
+  provider   = "prisma-client-js"
+  // Windows: binary engine avoids EPERM when renaming query_engine DLL (often locked by Node).
+  engineType = "binary"
 }
 
 datasource db {
@@ -14,6 +15,7 @@ enum Role {
   DISPATCHER
   MANAGER
   ADMIN
+  ACCOUNTANT
 }
 
 enum DriverStatus {
@@ -41,19 +43,86 @@ enum PaymentMethod {
 
 enum CarClass {
   ECONOMY
+  /// Оптимальний баланс ціни та якості
+  STANDARD
   COMFORT
   BUSINESS
   MINIVAN
+  /// Кур’єрська доставка (окрема націнка в тарифі)
+  DELIVERY
+  /// Пріоритетний пошук водія
+  EXPRESS
+}
+
+enum CancellationReason {
+  CLIENT_REQUEST
+  DRIVER_REQUEST
+  DISPATCHER_REQUEST
+  NO_DRIVERS_AVAILABLE
+  PLATFORM
+  OTHER
+}
+
+enum DriverVerificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum PayrollAccrualType {
+  SALARY
+  BONUS
+  DEDUCTION
+}
+
+enum ContactListKind {
+  FAVORITE
+  BLOCKED
+}
+
+/// Хто оплачує доставку (кур’єрський тариф)
+enum DeliveryPayer {
+  SENDER
+  RECIPIENT
+  CLIENT
+}
+
+enum ComplaintStatus {
+  OPEN
+  IN_REVIEW
+  RESOLVED
+  DISMISSED
+}
+
+/// Роль офісу: шаблон дозволів (кастомні та системні). legacyRole — значення JWT/enum User.role.
+model OfficeRole {
+  id          String   @id @default(uuid())
+  slug        String   @unique
+  displayName String
+  legacyRole  Role
+  isSystem    Boolean  @default(false)
+  permissions Json     @default("{}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users User[] @relation("UserOfficeRole")
+
+  @@map("office_roles")
 }
 
 model User {
   id        String   @id @default(uuid())
-  username  String?  @unique
+  username  String? @unique
   phone     String   @unique
   email     String?  @unique
   password  String
   fullName  String
+  /// Фото профілю: URL або data:image/jpeg;base64 (стиснуте на клієнті)
+  avatarUrl String? @db.Text
   role      Role     @default(CLIENT)
+  /// Шаблон дозволів офісу (кастомна роль або системний запис)
+  officeRoleId String?
+  officeRole   OfficeRole? @relation("UserOfficeRole", fields: [officeRoleId], references: [id], onDelete: SetNull)
   rating    Float    @default(5.0)
   pushToken String?
   createdAt DateTime @default(now())
@@ -62,29 +131,56 @@ model User {
   driverProfile   DriverProfile?
   employeeProfile EmployeeProfile?
   clientOrders    Order[]          @relation("ClientOrders")
-  reviews         Review[]         @relation("WrittenReviews")
+  preferredDriverOrders Order[]    @relation("PreferredDriverOrders")
+  reviewsWritten  Review[]         @relation("WrittenReviews")
+  reviewsAboutMe  Review[]         @relation("ReviewSubjectUser")
+  contactsOwned   UserContact[] @relation("UserContactOwner")
+  contactsAsPeer  UserContact[]    @relation("UserContactPeer")
+  payrollAccruals PayrollAccrual[]
+  savedPlaces     SavedPlace[]
+  complaintsAuthored Complaint[]   @relation("ComplaintAuthor")
+  auditLogs       AuditLog[]
 
   @@map("users")
   @@index([phone])
   @@index([username])
+  @@index([officeRoleId])
+}
+
+model UserContact {
+  id      String          @id @default(uuid())
+  ownerId String
+  peerId  String
+  kind    ContactListKind
+  createdAt DateTime @default(now())
+
+  owner User @relation("UserContactOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  peer  User @relation("UserContactPeer", fields: [peerId], references: [id], onDelete: Cascade)
+
+  @@unique([ownerId, peerId, kind])
+  @@index([ownerId])
+  @@map("user_contacts")
 }
 
 model DriverProfile {
-  id            String       @id @default(uuid())
-  userId        String       @unique
-  licenseNumber String       @unique
-  status        DriverStatus @default(OFFLINE)
-  balance       Decimal      @default(0.00) @db.Decimal(10, 2)
-  currentLat    Float?
-  currentLng    Float?
-  lastActive    DateTime     @default(now())
+  id                 String                   @id @default(uuid())
+  userId             String                   @unique
+  licenseNumber      String                   @unique
+  status             DriverStatus             @default(OFFLINE)
+  balance            Decimal                  @default(0.00) @db.Decimal(10, 2)
+  currentLat         Float?
+  currentLng         Float?
+  lastActive         DateTime                 @default(now())
+  verificationStatus DriverVerificationStatus @default(PENDING)
 
-  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  vehicle         Vehicle?
-  driverOrders    Order[]       @relation("DriverOrders")
-  transactions    Transaction[]
-  receivedReviews Review[]      @relation("DriverReviews")
-  locationLogs    LocationLog[]
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vehicle      Vehicle?
+  driverOrders Order[]       @relation("DriverOrders")
+  transactions Transaction[]
+  reviews      Review[]      @relation("DriverReviews")
+  locationLogs LocationLog[]
+
+  savedRoutes SavedDriverRoute[]
 
   @@map("driver_profiles")
   @@index([status])
@@ -110,10 +206,59 @@ model Vehicle {
   plateNumber    String   @unique
   productionYear Int
   carClass       CarClass @default(ECONOMY)
+  odometerKm     Int?
 
-  driver DriverProfile @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  driver              DriverProfile              @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  maintenanceRecords  VehicleMaintenanceRecord[]
 
   @@map("vehicles")
+}
+
+model VehicleMaintenanceRecord {
+  id          String   @id @default(uuid())
+  vehicleId   String
+  serviceDate DateTime @default(now())
+  serviceType String
+  amount      Decimal  @db.Decimal(10, 2)
+  odometerKm  Int?
+  vendor      String?
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@map("vehicle_maintenance_records")
+  @@index([vehicleId])
+  @@index([serviceDate])
+}
+
+model PayrollAccrual {
+  id          String             @id @default(uuid())
+  userId      String
+  periodStart DateTime
+  periodEnd   DateTime
+  amount      Decimal            @db.Decimal(10, 2)
+  type        PayrollAccrualType
+  description String?
+  createdAt   DateTime           @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("payroll_accruals")
+  @@index([userId])
+  @@index([periodStart])
+}
+
+model OperatingExpense {
+  id          String   @id @default(uuid())
+  category    String
+  amount      Decimal  @db.Decimal(10, 2)
+  expenseDate DateTime @default(now())
+  description String?
+  createdAt   DateTime @default(now())
+
+  @@map("operating_expenses")
+  @@index([expenseDate])
 }
 
 model Tariff {
@@ -130,36 +275,75 @@ model Tariff {
 }
 
 model Order {
-  id             String        @id @default(uuid())
-  clientId       String
-  driverId       String?
-  tariffId       String
+  id            String @id @default(uuid())
+  clientId      String
+  driverId      String?
+  tariffId      String
+
   pickupAddress  String
   pickupLat      Float
   pickupLng      Float
   dropoffAddress String
   dropoffLat     Float
   dropoffLng     Float
-  distanceKm     Float
-  totalPrice     Decimal       @db.Decimal(10, 2)
-  paymentMethod  PaymentMethod @default(CASH)
-  status         OrderStatus   @default(CREATED)
-  startedAt      DateTime?
-  finishedAt     DateTime?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
 
-  client      User           @relation("ClientOrders", fields: [clientId], references: [id])
-  driver      DriverProfile? @relation("DriverOrders", fields: [driverId], references: [id])
-  tariff      Tariff         @relation(fields: [tariffId], references: [id])
-  transaction Transaction?
-  review      Review?
-  chat        Chat?
+  distanceKm    Float
+  totalPrice    Decimal @db.Decimal(10, 2)
+  paymentMethod PaymentMethod @default(CASH)
+  status        OrderStatus   @default(CREATED)
+
+  surgeMultiplier       Float   @default(1)
+  /// Побажання клієнта: NO_MUSIC, QUIET_CHAT тощо (масив рядків у JSON).
+  clientPreferences     Json?
+  promoCode             String?
+  plannedRouteDistanceKm  Float?
+  plannedRouteDurationMin Float?
+  /// Оціночний маршрут pickup-dropoff (legacy); нові замовлення часто без полілінії.
+  plannedRoutePolyline    Json?
+  /// Навігація: до pickup, [lng,lat][]
+  navigationRouteToPickup    Json?
+  /// Навігація: pickup - dropoff, [lng,lat][]
+  navigationRouteToDropoff   Json?
+  actualRouteDistanceKm   Float?
+  platformFeeAmount       Decimal? @db.Decimal(10, 2)
+  driverEarningAmount     Decimal? @db.Decimal(10, 2)
+  matchDeadlineAt         DateTime?
+
+  /// Кур’єрська доставка: контакти та платник (лише для тарифу DELIVERY)
+  deliverySenderName    String?
+  deliverySenderPhone   String?
+  deliveryRecipientName String?
+  deliveryRecipientPhone String?
+  deliveryPayer         DeliveryPayer?
+
+  preferredDriverUserId String?
+  preferredDriver       User?         @relation("PreferredDriverOrders", fields: [preferredDriverUserId], references: [id], onDelete: SetNull)
+
+  /// Коментар диспетчера для водія (телефонне замовлення тощо)
+  dispatcherNotes String? @db.Text
+
+  cancelledByRole      Role?
+  cancellationReason   CancellationReason?
+
+  startedAt  DateTime?
+  finishedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  client        User            @relation("ClientOrders", fields: [clientId], references: [id])
+  driver        DriverProfile?  @relation("DriverOrders", fields: [driverId], references: [id])
+  tariff        Tariff          @relation(fields: [tariffId], references: [id])
+  transaction   Transaction?
+  reviews       Review[]
+  chat          Chat?
+  locationLogs  LocationLog[]
+  complaints    Complaint[]
 
   @@map("orders")
   @@index([status])
   @@index([clientId])
   @@index([driverId])
+  @@index([createdAt])
 }
 
 model Chat {
@@ -177,15 +361,18 @@ model Chat {
 model LocationLog {
   id        String   @id @default(uuid())
   driverId  String
+  orderId   String?
   lat       Float
   lng       Float
   speed     Float?
   timestamp DateTime @default(now())
 
   driver DriverProfile @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  order  Order?        @relation(fields: [orderId], references: [id], onDelete: SetNull)
 
   @@map("location_logs")
   @@index([driverId, timestamp])
+  @@index([orderId, timestamp])
 }
 
 model Transaction {
@@ -203,17 +390,92 @@ model Transaction {
 }
 
 model Review {
+  id            String   @id @default(uuid())
+  orderId       String
+  authorId      String
+  /// Профіль водія (лише коли клієнт оцінює водія).
+  driverId      String?
+  /// Користувач, якого оцінюють (водій або клієнт).
+  subjectUserId String
+  rating        Int
+  comment       String?
+  createdAt     DateTime @default(now())
+
+  order   Order          @relation(fields: [orderId], references: [id])
+  author  User           @relation("WrittenReviews", fields: [authorId], references: [id])
+  subject User           @relation("ReviewSubjectUser", fields: [subjectUserId], references: [id])
+  driver  DriverProfile? @relation("DriverReviews", fields: [driverId], references: [id])
+
+  @@unique([orderId, authorId])
+  @@index([subjectUserId])
+  @@map("reviews")
+}
+
+model SavedPlace {
   id        String   @id @default(uuid())
-  orderId   String   @unique
-  authorId  String
-  driverId  String
-  rating    Int
-  comment   String?
+  userId    String
+  label     String
+  address   String
+  lat       Float
+  lng       Float
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("saved_places")
+}
+
+model SavedDriverRoute {
+  id              String   @id @default(uuid())
+  driverProfileId String
+  name            String
+  pickupAddress   String
+  pickupLat       Float
+  pickupLng       Float
+  dropoffAddress  String
+  dropoffLat      Float
+  dropoffLng      Float
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  driver DriverProfile @relation(fields: [driverProfileId], references: [id], onDelete: Cascade)
+
+  @@index([driverProfileId])
+  @@map("saved_driver_routes")
+}
+
+model Complaint {
+  id              String          @id @default(uuid())
+  orderId         String?
+  authorClientId  String?
+  subjectText     String
+  status          ComplaintStatus @default(OPEN)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  order  Order? @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  author User?  @relation("ComplaintAuthor", fields: [authorClientId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([orderId])
+  @@map("complaints")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  action    String
+  entity    String?
+  entityId  String?
+  metadata  Json?
+  ip        String?
   createdAt DateTime @default(now())
 
-  order  Order         @relation(fields: [orderId], references: [id])
-  author User          @relation("WrittenReviews", fields: [authorId], references: [id])
-  driver DriverProfile @relation("DriverReviews", fields: [driverId], references: [id])
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
-  @@map("reviews")
+  @@index([createdAt])
+  @@index([userId])
+  @@map("audit_logs")
 }

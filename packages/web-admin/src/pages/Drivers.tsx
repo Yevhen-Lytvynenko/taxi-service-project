@@ -1,73 +1,77 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Box,
   Button,
-  Typography,
-  Paper,
-  IconButton,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-  MenuItem,
   Chip,
-  Tooltip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  MenuItem,
+  TextField,
+  Typography,
 } from '@mui/material';
-import { DataGrid, type GridColDef } from '@mui/x-data-grid';
-import { Edit, Delete, Add, GpsFixed } from '@mui/icons-material';
+import type { GridColDef } from '@mui/x-data-grid';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
+import { AppDataGrid } from '../components/organisms/AppDataGrid';
+import { buildGpsColumn, buildRowActionsColumn } from '../components/organisms/gridActions';
 
-// Типи даних (спрощені)
-interface DriverData {
-  id?: string;
+type DriverRow = {
+  id: string;
   fullName: string;
   phone: string;
   licenseNumber: string;
   vehicleModel: string;
   vehiclePlate: string;
   status: string;
-}
+};
+
+type DriverFormValues = {
+  fullName: string;
+  phone: string;
+  licenseNumber: string;
+  vehicleModel: string;
+  vehiclePlate: string;
+  status: string;
+};
 
 export const Drivers = () => {
   const navigate = useNavigate();
-  const [rows, setRows] = useState([]);
-  const [open, setOpen] = useState(false); // Стан модального вікна
-  const [editId, setEditId] = useState<string | null>(null); // Якщо null - створюємо, якщо є ID - редагуємо
+  const [rows, setRows] = useState<DriverRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [open, setOpen] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const { register, handleSubmit, reset, setValue } = useForm<DriverFormValues>();
 
-  // React Hook Form для зручної роботи з формами
-  const { register, handleSubmit, reset, setValue } = useForm<DriverData>();
-
-  // 1. ЗАВАНТАЖЕННЯ ДАНИХ
-  const fetchDrivers = async () => {
+  const fetchDrivers = useCallback(async () => {
+    setLoading(true);
     try {
       const res = await api.get('/drivers');
-      // Форматуємо дані для таблиці (плоска структура)
-      const formatted = res.data.map((d: any) => ({
-        id: d.id,
-        fullName: d.user?.fullName || 'N/A',
-        phone: d.user?.phone,
-        licenseNumber: d.licenseNumber,
-        vehicleModel: d.vehicle?.model || '-',
-        vehiclePlate: d.vehicle?.plateNumber || '-',
-        status: d.status
+      const formatted: DriverRow[] = (res.data as Array<Record<string, any>>).map((d) => ({
+        id: String(d.id),
+        fullName: d.user?.fullName ?? 'N/A',
+        phone: d.user?.phone ?? '',
+        licenseNumber: d.licenseNumber ?? '',
+        vehicleModel: d.vehicle?.model ?? '-',
+        vehiclePlate: d.vehicle?.plateNumber ?? '-',
+        status: String(d.status ?? 'OFFLINE'),
       }));
       setRows(formatted);
     } catch (error) {
       console.error('Failed to fetch drivers', error);
+    } finally {
+      setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    fetchDrivers();
   }, []);
 
-  // 2. ОБРОБНИКИ (ACTIONS)
-  const handleOpen = (driver?: any) => {
+  useEffect(() => {
+    void fetchDrivers();
+  }, [fetchDrivers]);
+
+  const handleOpen = (driver?: DriverRow) => {
     if (driver) {
-      // Режим редагування: заповнюємо форму
       setEditId(driver.id);
       setValue('fullName', driver.fullName);
       setValue('phone', driver.phone);
@@ -76,7 +80,6 @@ export const Drivers = () => {
       setValue('vehiclePlate', driver.vehiclePlate);
       setValue('status', driver.status);
     } else {
-      // Режим створення: чистимо форму
       setEditId(null);
       reset();
     }
@@ -84,114 +87,88 @@ export const Drivers = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (window.confirm('Ви впевнені, що хочете видалити водія?')) {
+    if (!window.confirm('Ви впевнені, що хочете видалити водія?')) return;
+    try {
       await api.delete(`/drivers/${id}`);
-      fetchDrivers();
+      void fetchDrivers();
+    } catch {
+      alert('Помилка видалення водія');
     }
   };
 
-  const onSubmit = async (data: DriverData) => {
+  const onSubmit = async (data: DriverFormValues) => {
     try {
       if (editId) {
-        // Логіка оновлення (тут спрощено, в реальності треба оновлювати і User, і DriverProfile)
-        // Для MVP можна відправляти запит на бекенд, який це розрулить
-        await api.put(`/drivers/${editId}`, data); 
+        await api.put(`/drivers/${editId}`, data);
       } else {
-        // Логіка створення
-        // УВАГА: Тут ви маєте викликати правильний ендпоінт створення
-        // Для прикладу:
         await api.post('/users', {
-            phone: data.phone,
-            fullName: data.fullName,
-            role: 'DRIVER',
-            password: 'driver_password', // Тимчасовий пароль
-            driverProfile: {
+          phone: data.phone,
+          fullName: data.fullName,
+          role: 'DRIVER',
+          password: 'driver_password',
+          driverProfile: {
+            create: {
+              licenseNumber: data.licenseNumber,
+              status: 'OFFLINE',
+              vehicle: {
                 create: {
-                    licenseNumber: data.licenseNumber,
-                    status: 'OFFLINE',
-                    vehicle: {
-                        create: {
-                            model: data.vehicleModel,
-                            plateNumber: data.vehiclePlate,
-                            color: 'White',
-                            productionYear: 2020,
-                            carClass: 'ECONOMY'
-                        }
-                    }
-                }
-            }
+                  model: data.vehicleModel,
+                  plateNumber: data.vehiclePlate,
+                  color: 'White',
+                  productionYear: 2020,
+                  carClass: 'ECONOMY',
+                },
+              },
+            },
+          },
         });
       }
       setOpen(false);
-      fetchDrivers();
-    } catch (error) {
+      void fetchDrivers();
+    } catch {
       alert('Помилка збереження');
     }
   };
 
-  // 3. КОЛОНКИ ТАБЛИЦІ
-  const columns: GridColDef[] = [
-    { field: 'fullName', headerName: 'Ім\'я', flex: 1 },
-    { field: 'phone', headerName: 'Телефон', flex: 1 },
-    { field: 'vehicleModel', headerName: 'Авто', flex: 1 },
-    { 
-      field: 'status', 
-      headerName: 'Статус', 
-      width: 120,
-      renderCell: (params) => (
-        <Chip 
-          label={params.value} 
-          color={params.value === 'ONLINE' ? 'success' : 'default'} 
-          size="small" 
-        />
-      )
-    },
+  const columns: GridColDef<DriverRow>[] = [
+    buildGpsColumn<DriverRow>((row) => row.id, navigate),
+    { field: 'fullName', headerName: "Ім'я", flex: 1, minWidth: 180 },
+    { field: 'phone', headerName: 'Телефон', flex: 1, minWidth: 140 },
+    { field: 'licenseNumber', headerName: 'Права', width: 130 },
+    { field: 'vehicleModel', headerName: 'Авто', flex: 1, minWidth: 140 },
+    { field: 'vehiclePlate', headerName: 'Номер', width: 130 },
     {
-      field: 'actions',
-      headerName: 'Дії',
-      width: 200,
-      sortable: false,
-      renderCell: (params) => (
-        <Box>
-          <Tooltip title="Стежування на мапі">
-            <IconButton
-              color="secondary"
-              onClick={() => navigate(`/live/driver/${params.id as string}`)}
-            >
-              <GpsFixed />
-            </IconButton>
-          </Tooltip>
-          <IconButton color="primary" onClick={() => handleOpen(params.row)}>
-            <Edit />
-          </IconButton>
-          <IconButton color="error" onClick={() => handleDelete(params.id as string)}>
-            <Delete />
-          </IconButton>
-        </Box>
-      ),
+      field: 'status',
+      headerName: 'Статус',
+      width: 120,
+      renderCell: (params) => {
+        const v = String(params.value);
+        const color: 'success' | 'warning' | 'default' =
+          v === 'ONLINE' ? 'success' : v === 'BUSY' ? 'warning' : 'default';
+        return <Chip label={v} color={color} size="small" />;
+      },
     },
+    buildRowActionsColumn<DriverRow>({
+      onEdit: handleOpen,
+      onDelete: handleDelete,
+    }),
   ];
 
   return (
-    <Box>
-      <Box display="flex" justifyContent="space-between" mb={2}>
-        <Typography variant="h4">Водії</Typography>
-        <Button variant="contained" startIcon={<Add />} onClick={() => handleOpen()}>
-          Додати водія
-        </Button>
-      </Box>
+    <>
+      <AppDataGrid<DriverRow>
+        storageKey="drivers"
+        rows={rows}
+        columns={columns}
+        loading={loading}
+        title="Водії"
+        subtitle="Іконка GPS — перехід на стежування за водієм у реальному часі"
+        onCreate={() => handleOpen()}
+        createLabel="Додати водія"
+        onRefresh={() => void fetchDrivers()}
+        exportFileName="drivers"
+      />
 
-      <Paper sx={{ height: 600, width: '100%' }}>
-        <DataGrid
-          rows={rows}
-          columns={columns}
-          initialState={{ pagination: { paginationModel: { pageSize: 10 } } }}
-          pageSizeOptions={[5, 10, 25]}
-          disableRowSelectionOnClick
-        />
-      </Paper>
-
-      {/* Модальне вікно (Dialog) */}
       <Dialog open={open} onClose={() => setOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>{editId ? 'Редагувати водія' : 'Новий водій'}</DialogTitle>
         <form onSubmit={handleSubmit(onSubmit)}>
@@ -200,13 +177,21 @@ export const Drivers = () => {
               <TextField label="ПІБ" fullWidth {...register('fullName', { required: true })} />
               <TextField label="Телефон" fullWidth {...register('phone', { required: true })} />
               <TextField label="Номер прав" fullWidth {...register('licenseNumber')} />
-              
-              <Typography variant="subtitle2" sx={{ mt: 1 }}>Транспорт</Typography>
+
+              <Typography variant="subtitle2" sx={{ mt: 1 }}>
+                Транспорт
+              </Typography>
               <TextField label="Модель авто" fullWidth {...register('vehicleModel')} />
               <TextField label="Номерний знак" fullWidth {...register('vehiclePlate')} />
-              
+
               {editId && (
-                <TextField select label="Статус" defaultValue="OFFLINE" fullWidth {...register('status')}>
+                <TextField
+                  select
+                  label="Статус"
+                  defaultValue="OFFLINE"
+                  fullWidth
+                  {...register('status')}
+                >
                   <MenuItem value="ONLINE">ONLINE</MenuItem>
                   <MenuItem value="BUSY">BUSY</MenuItem>
                   <MenuItem value="OFFLINE">OFFLINE</MenuItem>
@@ -216,10 +201,12 @@ export const Drivers = () => {
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setOpen(false)}>Скасувати</Button>
-            <Button type="submit" variant="contained">Зберегти</Button>
+            <Button type="submit" variant="contained">
+              Зберегти
+            </Button>
           </DialogActions>
         </form>
       </Dialog>
-    </Box>
+    </>
   );
 };

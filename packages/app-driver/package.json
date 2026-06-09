@@ -3,9 +3,12 @@
   "version": "1.0.0",
   "main": "index.ts",
   "scripts": {
-    "start": "expo start --port 8082 --offline",
+    "start": "expo start --port 8082",
+    "start:online": "expo start --port 8082",
     "android": "expo start --android --port 8082 --offline",
+    "android:online": "expo start --android --port 8082",
     "ios": "expo start --ios --port 8082 --offline",
+    "ios:online": "expo start --ios --port 8082",
     "web": "expo start --web --port 8082 --offline"
   },
   "dependencies": {
@@ -16,6 +19,8 @@
     "@react-navigation/native-stack": "^6.9.26",
     "expo": "~51.0.28",
     "expo-font": "~12.0.10",
+    "expo-image-manipulator": "~12.0.5",
+    "expo-image-picker": "~15.1.0",
     "expo-location": "~17.0.1",
     "expo-status-bar": "~1.12.1",
     "react": "18.2.0",

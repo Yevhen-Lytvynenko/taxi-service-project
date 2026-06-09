@@ -36,8 +36,13 @@ export const LoginScreen = ({ navigation, onLoginSuccess }: LoginScreenProps) =>
       await AsyncStorage.setItem('token', data.token);
       await AsyncStorage.setItem('user', JSON.stringify(data.user));
       onLoginSuccess();
-    } catch {
-      Alert.alert('Помилка', 'Невірний телефон або пароль');
+    } catch (e: any) {
+      const status = e?.response?.status;
+      if (status === 401) {
+        Alert.alert('Помилка', 'Невірний телефон або пароль');
+      } else {
+        Alert.alert('Помилка', 'Не вдалося з\'єднатися з сервером. Перевірте підключення.');
+      }
     } finally {
       setLoading(false);
     }
@@ -52,8 +57,8 @@ export const LoginScreen = ({ navigation, onLoginSuccess }: LoginScreenProps) =>
       <View style={styles.header}>
         <Image source={require('../../assets/Logo.png')} style={styles.logoImage} />
         <Text style={styles.logo}>Strum</Text>
-        <Text style={styles.subtitle}>Клієнт</Text>
-        <CheckeredStrip height={6} />
+        <Text style={styles.appBadge}>Застосунок для пасажирів</Text>
+        <CheckeredStrip height={8} />
       </View>
 
       <View style={styles.form}>
@@ -89,7 +94,7 @@ export const LoginScreen = ({ navigation, onLoginSuccess }: LoginScreenProps) =>
           labelStyle={styles.buttonLabel}
           style={styles.button}
         >
-          УВІЙТИ
+          Увійти
         </Button>
 
         <TouchableOpacity onPress={() => navigation.navigate('Register')} style={styles.linkButton}>
@@ -110,7 +115,7 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    marginBottom: spacing.xl * 2,
+    marginBottom: spacing.xl,
   },
   logoImage: {
     width: 64,
@@ -122,6 +127,14 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontFamily: typography.fontFamily.bold,
     fontSize: typography.fontSize.xxl,
+  },
+  appBadge: {
+    color: colors.onSurfaceMuted,
+    fontFamily: typography.fontFamily.medium,
+    fontSize: typography.fontSize.sm,
+    textAlign: 'center',
+    marginTop: spacing.xs,
+    marginBottom: spacing.sm,
   },
   subtitle: {
     color: colors.onSurfaceMuted,

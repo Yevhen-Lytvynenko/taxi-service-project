@@ -14,6 +14,7 @@ export async function getRoute(
   try {
     const res = await fetch(url, {
       headers: { 'User-Agent': 'StrumTaxi-GpsSimulator/1.0' },
+      signal: AbortSignal.timeout(8000),
     });
 
     if (!res.ok) return null;

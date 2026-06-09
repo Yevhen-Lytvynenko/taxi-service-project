@@ -87,6 +87,7 @@ export const RegisterScreen = ({ navigation }: RegisterScreenProps) => {
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <Text style={styles.title}>Реєстрація</Text>
+          <Text style={styles.appBadge}>Клієнтський застосунок Strum</Text>
           <CheckeredStrip height={6} />
         </View>
 
@@ -153,6 +154,13 @@ const styles = StyleSheet.create({
     color: colors.onBackground,
     fontFamily: typography.fontFamily.bold,
     fontSize: typography.fontSize.xl,
+    marginBottom: spacing.xs,
+  },
+  appBadge: {
+    color: colors.onSurfaceMuted,
+    fontFamily: typography.fontFamily.medium,
+    fontSize: typography.fontSize.sm,
+    textAlign: 'center',
     marginBottom: spacing.md,
   },
   form: {

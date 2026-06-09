@@ -1,6 +1,5 @@
-import { PrismaClient, Prisma } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { Prisma } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 
 export class TransactionService {
   async create(data: Prisma.TransactionCreateInput) {
@@ -16,10 +15,10 @@ export class TransactionService {
   async findAll() {
     return prisma.transaction.findMany({
       include: {
-        driver: true,
-        order: true
+        driver: { include: { user: true } },
+        order: true,
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
     });
   }
 

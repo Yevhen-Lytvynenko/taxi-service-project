@@ -1,6 +1,5 @@
-import { PrismaClient, Prisma } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { Prisma } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 
 export class LocationService {
   async create(data: Prisma.LocationLogCreateInput) {
@@ -19,6 +18,19 @@ export class LocationService {
         }
       },
       orderBy: { timestamp: 'asc' }
+    });
+  }
+
+  /** Адмінка: останні точки всіх водіїв (для демо-таблиці без вибору водія). */
+  async getRecentLogs(limit = 2000) {
+    const lim = Math.min(10000, Math.max(1, limit));
+    return prisma.locationLog.findMany({
+      take: lim,
+      orderBy: { timestamp: 'desc' },
+      include: {
+        driver: { include: { user: { select: { fullName: true, phone: true } } } },
+        order: { select: { id: true, status: true } },
+      },
     });
   }
 

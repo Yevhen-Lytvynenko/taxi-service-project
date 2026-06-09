@@ -5,8 +5,9 @@ import { createApp } from '../src/createApp';
 
 let app: Express;
 
-beforeAll(() => {
-  app = createApp().app;
+beforeAll(async () => {
+  const { app: a } = await createApp();
+  app = a;
 });
 
 describe('GET /', () => {

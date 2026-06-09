@@ -31,10 +31,9 @@ interface DriverWithDisplay extends Driver {
   displayHeading: number;
 }
 
-const getSocketUrl = () => {
-  const base = import.meta.env.VITE_API_URL ?? 'http://localhost:4000';
-  return base.replace(/\/api\/?$/, '');
-};
+import { getSocketOriginFromEnv } from '../config/apiBase';
+
+const getSocketUrl = () => getSocketOriginFromEnv();
 
 /** Відсікаємо лише явний сміття (два демони, биті дані), щоб не блокувати нормальні кроки по маршруту */
 function isPlausibleJump(distKm: number, dtMs: number): boolean {

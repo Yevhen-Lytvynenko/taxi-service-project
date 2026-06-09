@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { TariffService } from '../services/tariff.service';
+import { clientIp, writeAuditLog } from '../services/audit.service';
 
 const tariffService = new TariffService();
 
@@ -7,6 +8,14 @@ export class TariffController {
   async create(req: Request, res: Response) {
     try {
       const tariff = await tariffService.create(req.body);
+      void writeAuditLog({
+        userId: req.user?.id,
+        action: 'TARIFF_CREATE',
+        entity: 'Tariff',
+        entityId: tariff.id,
+        metadata: { name: tariff.name },
+        ip: clientIp(req),
+      });
       res.status(201).json(tariff);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
@@ -34,7 +43,15 @@ export class TariffController {
 
   async update(req: Request, res: Response) {
     try {
-      const tariff = await tariffService.update(req.params.id as string, req.body);
+      const id = req.params.id as string;
+      const tariff = await tariffService.update(id, req.body);
+      void writeAuditLog({
+        userId: req.user?.id,
+        action: 'TARIFF_UPDATE',
+        entity: 'Tariff',
+        entityId: id,
+        ip: clientIp(req),
+      });
       res.json(tariff);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
@@ -43,7 +60,15 @@ export class TariffController {
 
   async delete(req: Request, res: Response) {
     try {
-      await tariffService.delete(req.params.id as string);
+      const id = req.params.id as string;
+      await tariffService.delete(id);
+      void writeAuditLog({
+        userId: req.user?.id,
+        action: 'TARIFF_DELETE',
+        entity: 'Tariff',
+        entityId: id,
+        ip: clientIp(req),
+      });
       res.status(204).send();
     } catch (error: any) {
       res.status(500).json({ error: error.message });

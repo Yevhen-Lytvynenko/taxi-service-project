@@ -1,3 +1,18 @@
+# Strum / Web admin
+
+## Демо-доступ (після `npm run db:seed` у backend)
+
+| Логін (username) | Пароль   | Роль           |
+|------------------|----------|----------------|
+| `admin`          | `admin`  | Адміністратор  |
+| `manager`        | `demo`   | Менеджер       |
+| `dispatcher`     | `demo`   | Диспетчер      |
+| `accountant`     | `demo`   | Бухгалтер      |
+
+Додатково: змінити `VITE_API_URL` у `.env` за потреби (див. `.env.example`).
+
+---
+
 # React + TypeScript + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.

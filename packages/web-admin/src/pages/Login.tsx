@@ -1,7 +1,14 @@
-import React, { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { getStoredStaffRole, postLoginDefaultPath } from '../config/menuAccess';
 import { TextField, Button, Box, Typography, Paper, Alert } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
+import { jwtDecode } from 'jwt-decode';
 import api from '../api/axios';
+import { BrandLogo } from '../components/BrandLogo';
+import { BrandWatermark } from '../components/BrandWatermark';
+type JwtPermPayload = {
+  perms?: Record<string, 'none' | 'read' | 'write'>;
+};
 
 export const Login = () => {
   const [username, setUsername] = useState('admin');
@@ -9,13 +16,25 @@ export const Login = () => {
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    const role = getStoredStaffRole();
+    if (token && role) {
+      navigate(postLoginDefaultPath(role), { replace: true });
+    }
+  }, [navigate]);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       const res = await api.post('/auth/login', { username, password });
-      localStorage.setItem('token', res.data.token);
-      localStorage.setItem('user', JSON.stringify(res.data.user));
-      navigate('/dashboard');
+      const token = res.data.token as string;
+      const decoded = jwtDecode<JwtPermPayload>(token);
+      const userWithPerms = { ...res.data.user, perms: decoded.perms };
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(userWithPerms));
+      const role = res.data.user?.role as string | undefined;
+      navigate(postLoginDefaultPath(role));
     } catch (err: any) {
       const msg = err.response?.data?.error || err.message;
       setError(msg || 'Невірний логін або пароль');
@@ -24,9 +43,15 @@ export const Login = () => {
   };
 
   return (
-    <Box display="flex" justifyContent="center" alignItems="center" minHeight="100vh" bgcolor="#f5f5f5">
-      <Paper elevation={3} sx={{ p: 4, width: 400 }}>
-        <Typography variant="h5" mb={3} textAlign="center">Вхід в систему</Typography>
+    <BrandWatermark variant="center" sx={{ minHeight: '100vh', bgcolor: '#f5f5f5' }}>
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="100vh">
+        <Paper elevation={3} sx={{ p: 4, width: 400, maxWidth: 'calc(100% - 32px)' }}>
+          <Box display="flex" justifyContent="center" mb={2}>
+            <BrandLogo size={48} />
+          </Box>
+          <Typography variant="h5" mb={3} textAlign="center">
+            Вхід в систему
+          </Typography>
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
         <form onSubmit={handleLogin}>
           <TextField 
@@ -41,7 +66,8 @@ export const Login = () => {
             Увійти
           </Button>
         </form>
-      </Paper>
-    </Box>
+        </Paper>
+      </Box>
+    </BrandWatermark>
   );
 };
