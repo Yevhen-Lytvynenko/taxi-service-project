@@ -23,7 +23,7 @@ import {
   FinancePage,
 } from './pages/analytics';
 import { ProfileSettings } from './pages/settings/ProfileSettings';
-import { RolesSettings } from './pages/settings/RolesSettings';
+import { RolesConstructor } from './pages/settings/RolesConstructor';
 import { ReleaseNotes } from './pages/settings/ReleaseNotes';
 import { ComplaintsPage } from './pages/Complaints';
 import { AuditLogsPage } from './pages/AuditLogs';
@@ -61,7 +61,7 @@ function App() {
           <Route path="/settings">
             <Route index element={<Navigate to="profile" replace />} />
             <Route path="profile" element={<ProfileSettings />} />
-            <Route path="roles" element={<RolesSettings />} />
+            <Route path="roles" element={<RolesConstructor />} />
             <Route path="release-notes" element={<ReleaseNotes />} />
           </Route>
 

@@ -19,6 +19,32 @@ function parseRange(from?: string, to?: string): DateRange {
   return { from: fromDate, to: toDate };
 }
 
+function truncateToUtcHour(d: Date): Date {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), d.getUTCHours(), 0, 0, 0));
+}
+
+/** Заповнює пропуски нулями для неперервного графіка попиту. */
+function fillMissingHourlyBuckets(
+  series: { bucketUtc: string; orderCount: number }[],
+  from: Date,
+  to: Date
+): { bucketUtc: string; orderCount: number }[] {
+  const byHour = new Map<number, number>();
+  for (const s of series) {
+    byHour.set(truncateToUtcHour(new Date(s.bucketUtc)).getTime(), s.orderCount);
+  }
+  const start = truncateToUtcHour(from);
+  const end = truncateToUtcHour(to);
+  const out: { bucketUtc: string; orderCount: number }[] = [];
+  for (let t = start.getTime(); t <= end.getTime(); t += 3600 * 1000) {
+    out.push({
+      bucketUtc: new Date(t).toISOString(),
+      orderCount: byHour.get(t) ?? 0,
+    });
+  }
+  return out;
+}
+
 export async function getSummary(from?: string, to?: string) {
   const { from: f, to: t } = parseRange(from, to);
 
@@ -277,10 +303,14 @@ export async function getDemandHourlySeries(from?: string, to?: string) {
     GROUP BY 1
     ORDER BY 1 ASC
   `;
-  return rows.map((r) => ({
-    bucketUtc: r.bucket.toISOString(),
-    orderCount: Number(r.order_count),
-  }));
+  return fillMissingHourlyBuckets(
+    rows.map((r) => ({
+      bucketUtc: r.bucket.toISOString(),
+      orderCount: Number(r.order_count),
+    })),
+    f,
+    t
+  );
 }
 
 /** Автоматичні «години пік» — години з кількістю замовлень вище середнього + k×σ. */
@@ -382,6 +412,8 @@ export async function getDemandForecast(from?: string, to?: string) {
   return {
     methodology:
       'baseline = avg hourly buckets by (weekday × hour) over selected period; next 168h from min(now, period end); weekend ×1.12; UA holidays ×1.18',
+    methodologyUk:
+      'Середнє замовлень за годину для кожної пари «день тижня × година», прогноз на 168 год вперед від кінця періоду (або від зараз), коригування на вихідні (+12%) та свята (+18%).',
     historyBuckets: history.length,
     forecastAnchorUtc: anchor.toISOString(),
     forecast,

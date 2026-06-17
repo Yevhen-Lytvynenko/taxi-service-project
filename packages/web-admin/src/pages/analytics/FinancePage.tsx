@@ -48,6 +48,13 @@ type Summary = {
 
 type Opex = Record<string, { total?: string; records?: number; transactions?: number }>;
 
+const OPEX_LABELS: Record<string, string> = {
+  fleetMaintenance: 'Обслуговування автопарку',
+  payrollAccruals: 'Нарахування зарплат',
+  operatingExpenses: 'Операційні витрати',
+  driverPayoutsOrders: 'Виплати водіям (замовлення)',
+};
+
 export const FinancePage = () => {
   const { fromIso, toIso, fromDate, toDate, refreshKey } = useOutletContext<AnalyticsRange>();
   const [daily, setDaily] = useState<Daily[]>([]);
@@ -243,11 +250,27 @@ export const FinancePage = () => {
         <Grid item xs={12} md={6}>
           <Paper sx={{ p: 2, borderRadius: 2 }} variant="outlined">
             <Typography variant="subtitle2" gutterBottom>
-              OPEX
+              Операційні витрати (OPEX)
             </Typography>
-            <Typography component="pre" sx={{ m: 0, fontSize: 12, whiteSpace: 'pre-wrap' }}>
-              {JSON.stringify(opex, null, 2)}
-            </Typography>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Категорія</TableCell>
+                  <TableCell align="right">Сума, ₴</TableCell>
+                  <TableCell align="right">Записів</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {opex &&
+                  Object.entries(opex).map(([key, val]) => (
+                    <TableRow key={key}>
+                      <TableCell>{OPEX_LABELS[key] ?? key}</TableCell>
+                      <TableCell align="right">{val.total ?? '0'}</TableCell>
+                      <TableCell align="right">{val.records ?? val.transactions ?? '—'}</TableCell>
+                    </TableRow>
+                  ))}
+              </TableBody>
+            </Table>
           </Paper>
         </Grid>
 

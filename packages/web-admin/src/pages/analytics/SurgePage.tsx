@@ -6,7 +6,6 @@ import {
   Grid,
   Alert,
   CircularProgress,
-  Chip,
 } from '@mui/material';
 import { useOutletContext } from 'react-router-dom';
 import {
@@ -88,10 +87,8 @@ export const SurgePage = () => {
       </Typography>
       <AnalyticsHint>
         <Typography variant="body2" color="text.secondary" component="div">
-          Коефіцієнти{' '}
-          <Chip size="small" label="surgeMultiplier" sx={{ verticalAlign: 'middle', mx: 0.5 }} /> зберігаються на кожному замовленні;
-          графік показує середній surge та обсяг за години створення замовлень у межах періоду. Пікові множники при створенні поїздки
-          задаються правилом часу доби на бекенді (<code>SURGE_PEAK_MULTIPLIER</code>).
+          Графік показує середній коефіцієнт surge та обсяг замовлень за години створення поїздок у межах обраного періоду. Під час
+          пікового попиту націнка зазвичай вища.
         </Typography>
       </AnalyticsHint>
       {error && (

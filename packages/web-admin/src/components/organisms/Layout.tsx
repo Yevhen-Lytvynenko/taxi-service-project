@@ -48,7 +48,11 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { BrandLogo } from '../BrandLogo';
 import { BrandWatermark } from '../BrandWatermark';
 import { OutletGuard } from '../OutletGuard';
-import { filterMenuByPathAccess, getStoredStaffRole, type MenuRowConfig } from '../../config/menuAccess';
+import {
+  ADMIN_MENU_TEMPLATE,
+  filterMenuByPathAccess,
+  getStoredStaffRole,
+} from '../../config/menuAccess';
 
 const drawerWidth = 260;
 
@@ -56,37 +60,6 @@ type MenuRowUi =
   | { type: 'divider' }
   | { type: 'subheader'; text: string }
   | { type: 'link'; text: string; icon: React.ReactNode; path: string };
-
-const MENU_TEMPLATE: MenuRowConfig[] = [
-  { type: 'subheader', text: 'Операції (ІС)' },
-  { type: 'link', text: 'Дашборд', path: '/dashboard' },
-  { type: 'link', text: 'Користувачі', path: '/users' },
-  { type: 'link', text: 'Клієнти', path: '/clients' },
-  { type: 'link', text: 'Водії', path: '/drivers' },
-  { type: 'link', text: 'Співробітники', path: '/employees' },
-  { type: 'link', text: 'Замовлення', path: '/orders' },
-  { type: 'link', text: 'Фінанси (транзакції)', path: '/transactions' },
-  { type: 'link', text: 'Чати', path: '/chats' },
-  { type: 'link', text: 'Відгуки', path: '/reviews' },
-  { type: 'link', text: 'GPS логи', path: '/locations' },
-  { type: 'link', text: 'Тарифи', path: '/tariffs' },
-  { type: 'link', text: 'Стежування (live)', path: '/live' },
-  { type: 'link', text: 'Скарги', path: '/complaints' },
-  { type: 'link', text: 'Журнал аудиту', path: '/audit-logs' },
-
-  { type: 'subheader', text: 'Аналітика (демо)' },
-  { type: 'link', text: 'Огляд модуля', path: '/analytics' },
-  { type: 'link', text: 'Прогноз і піки', path: '/analytics/demand' },
-  { type: 'link', text: 'Surge / ціноутворення', path: '/analytics/surge' },
-  { type: 'link', text: 'Гео та теплокарти', path: '/analytics/geo' },
-  { type: 'link', text: 'Водії та автопарк', path: '/analytics/fleet' },
-  { type: 'link', text: 'Фінанси та звіти', path: '/analytics/finance' },
-
-  { type: 'subheader', text: 'Налаштування' },
-  { type: 'link', text: 'Профіль', path: '/settings/profile' },
-  { type: 'link', text: 'Ролі і доступи', path: '/settings/roles' },
-  { type: 'link', text: 'Нотатки релізу', path: '/settings/release-notes' },
-];
 
 const ICONS: Record<string, React.ReactNode> = {
   '/dashboard': <DashboardIcon />,
@@ -123,7 +96,7 @@ export const Layout = () => {
 
   const menuRows = useMemo((): MenuRowUi[] => {
     const role = getStoredStaffRole();
-    const filtered = filterMenuByPathAccess(MENU_TEMPLATE, role);
+    const filtered = filterMenuByPathAccess(ADMIN_MENU_TEMPLATE, role);
     const out: MenuRowUi[] = [];
     for (const it of filtered) {
       if (it.type === 'divider' || it.type === 'subheader') {

@@ -18,6 +18,7 @@ import { shortOrderAddress } from '../utils/shortOrderAddress';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { OrderTrackingMap, TrackingPhase } from '../components/OrderTrackingMap';
 import { TripChatModal } from '../components/TripChatModal';
+import { TripReviewModal } from '../components/TripReviewModal';
 import { dialPeerPhone } from '../utils/phoneDial';
 import { colors, spacing, radius, typography, mapBottomSheet, mapBottomSheetScroll } from '../theme';
 
@@ -31,7 +32,8 @@ interface Order {
   dropoffLng: number;
   status: string;
   totalPrice: string | number;
-  client?: { fullName: string; phone?: string | null };
+  client?: { id: string; fullName: string; phone?: string | null };
+  reviews?: { id: string; authorId: string; rating: number }[];
   tariff?: { name: string };
   deliverySenderName?: string | null;
   deliverySenderPhone?: string | null;
@@ -140,6 +142,8 @@ export const ActiveOrderScreen = ({ navigation, route }: ActiveOrderScreenProps)
   const [simulating, setSimulating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [myId, setMyId] = useState<string | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const lastCommittedDriverPosRef = useRef<{ lat: number; lng: number } | null>(null);
   const driverPosForAltsRef = useRef<{ lat: number; lng: number } | null>(null);
@@ -393,12 +397,34 @@ export const ActiveOrderScreen = ({ navigation, route }: ActiveOrderScreenProps)
   }, [orderId, fetchOrder, mergeDriverPos]);
 
   useEffect(() => {
+    void api.get('/auth/me').then((r) => setMyId((r.data as { id: string }).id)).catch(() => {});
+  }, []);
+
+  useEffect(() => {
     if (!order) return;
-    if (order.status !== 'COMPLETED' && order.status !== 'CANCELLED') return;
+    if (order.status === 'CANCELLED') {
+      if (completedNavRef.current) return;
+      completedNavRef.current = true;
+      navigation.navigate('Order', { screen: 'OrdersQueue' });
+      return;
+    }
+    if (order.status !== 'COMPLETED') return;
     if (completedNavRef.current) return;
+    const alreadyReviewed =
+      myId != null && (order.reviews ?? []).some((r) => r.authorId === myId);
+    if (!alreadyReviewed) {
+      setReviewOpen(true);
+      return;
+    }
     completedNavRef.current = true;
     navigation.navigate('Order', { screen: 'OrdersQueue' });
-  }, [order?.status, navigation]);
+  }, [order?.status, order?.reviews, navigation, myId]);
+
+  const finishAfterReview = useCallback(() => {
+    setReviewOpen(false);
+    completedNavRef.current = true;
+    navigation.navigate('Order', { screen: 'OrdersQueue' });
+  }, [navigation]);
 
   useEffect(() => {
     if (!order || !driverPos || updating) return;
@@ -918,6 +944,15 @@ export const ActiveOrderScreen = ({ navigation, route }: ActiveOrderScreenProps)
       canSend={chatCanSend}
       emptyHint="Ще немає повідомлень. Напишіть пасажиру."
     />
+    {orderId && order.status === 'COMPLETED' ? (
+      <TripReviewModal
+        visible={reviewOpen}
+        orderId={orderId}
+        title="Оцініть пасажира"
+        subjectName={order.client?.fullName ?? 'Клієнт'}
+        onDone={finishAfterReview}
+      />
+    ) : null}
     </>
   );
 };

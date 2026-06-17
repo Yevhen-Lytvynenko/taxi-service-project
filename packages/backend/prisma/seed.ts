@@ -663,11 +663,41 @@ async function main() {
     { client: 'Можна відкласти старт на 5 хв?', driver: 'Зрозумів, чекаю без лічильника' },
   ];
 
-  for (let oi = 0; oi < 135; oi++) {
-    const daysBack = Math.floor(Math.random() * 46);
+  function pickWeightedUtcHour(): number {
+    const weights = new Array<number>(24).fill(1);
+    for (let h = 0; h < 24; h++) {
+      if (h >= 2 && h <= 5) weights[h] = 0.35;
+      else if (h >= 6 && h <= 9) weights[h] = 3.2;
+      else if (h >= 10 && h <= 13) weights[h] = 1.4;
+      else if (h >= 14 && h <= 19) weights[h] = 3.8;
+      else if (h >= 20 && h <= 22) weights[h] = 2.1;
+      else weights[h] = 0.5;
+    }
+    const total = weights.reduce((a, b) => a + b, 0);
+    let r = Math.random() * total;
+    for (let h = 0; h < 24; h++) {
+      r -= weights[h]!;
+      if (r <= 0) return h;
+    }
+    return 12;
+  }
+
+  function pickDaysBackWeighted(): number {
+    const daysBack = Math.floor(Math.random() * 60);
+    const d = new Date();
+    d.setUTCDate(d.getUTCDate() - daysBack);
+    const dow = d.getUTCDay();
+    if (dow === 5 || dow === 6) {
+      return Math.max(0, daysBack - (Math.random() < 0.25 ? 1 : 0));
+    }
+    return daysBack;
+  }
+
+  for (let oi = 0; oi < 450; oi++) {
+    const daysBack = pickDaysBackWeighted();
     const createdAt = new Date();
     createdAt.setUTCDate(createdAt.getUTCDate() - daysBack);
-    createdAt.setUTCHours(6 + Math.floor(Math.random() * 16), Math.floor(Math.random() * 59), 0, 0);
+    createdAt.setUTCHours(pickWeightedUtcHour(), Math.floor(Math.random() * 59), 0, 0);
 
     const p = pick(ODESSA_ADDRESSES);
     let d = pick(ODESSA_ADDRESSES);

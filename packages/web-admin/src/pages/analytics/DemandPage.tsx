@@ -11,7 +11,14 @@ import {
   TableCell,
   TableHead,
   TableRow,
+  IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
 } from '@mui/material';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { useOutletContext } from 'react-router-dom';
 import {
   ResponsiveContainer,
@@ -39,7 +46,8 @@ type PeakBlock = {
   peaks: { bucketUtc: string; orderCount: number; zScore: number }[];
 };
 type Forecast = {
-  methodology: string;
+  methodology?: string;
+  methodologyUk?: string;
   historyBuckets: number;
   forecastAnchorUtc?: string;
   forecast: {
@@ -50,6 +58,13 @@ type Forecast = {
   }[];
 };
 
+function formatPeakDeviation(count: number, mean: number): string {
+  if (mean <= 0) return `${count} замовлень`;
+  const pct = Math.round(((count - mean) / mean) * 100);
+  if (pct <= 5) return 'На рівні середнього';
+  return `+${pct}% від середнього`;
+}
+
 export const DemandPage = () => {
   const { fromIso, toIso, fromDate, toDate, refreshKey } = useOutletContext<AnalyticsRange>();
   const [series, setSeries] = useState<Hourly[]>([]);
@@ -57,6 +72,7 @@ export const DemandPage = () => {
   const [forecast, setForecast] = useState<Forecast | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [methodologyOpen, setMethodologyOpen] = useState(false);
 
   useEffect(() => {
     let cancel = false;
@@ -108,6 +124,14 @@ export const DemandPage = () => {
     weekend: r.isWeekend,
   }));
 
+  const peakBars = (peaks?.peaks ?? []).slice(0, 12).map((p) => ({
+    name: new Date(p.bucketUtc).toLocaleString('uk-UA', { weekday: 'short', hour: '2-digit' }),
+    count: p.orderCount,
+  }));
+
+  const peakCount = peaks?.peaks?.length ?? 0;
+  const meanOrders = peaks?.mean ?? 0;
+
   if (loading && !series.length) {
     return (
       <Box display="flex" justifyContent="center" py={6}>
@@ -122,7 +146,7 @@ export const DemandPage = () => {
         Прогнозування попиту та пікових навантажень
       </Typography>
       <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-        Обраний період: {fromDate} — {toDate} (UTC-день для меж фільтра)
+        Обраний період: {fromDate} — {toDate}
       </Typography>
       <AnalyticsHint>
         <Typography variant="body2" color="text.secondary" component="div">
@@ -144,7 +168,7 @@ export const DemandPage = () => {
               Фактичний попит (замовлення / година)
             </Typography>
             <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={chartDemand} margin={{ top: 8, right: 8, left: 8, bottom: 36 }}>
+              <AreaChart data={chartDemand} margin={{ top: 8, right: 8, left: 12, bottom: 36 }}>
                 <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
                 <XAxis
                   dataKey="t"
@@ -157,9 +181,17 @@ export const DemandPage = () => {
                   allowDecimals={false}
                   label={{ value: 'Замовлень за годину', angle: -90, position: 'insideLeft' }}
                 />
-                <Tooltip />
+                <Tooltip labelFormatter={(label) => `Час: ${label}`} />
                 <Legend verticalAlign="top" height={28} />
-                <Area type="monotone" dataKey="orders" name="Замовлень" stroke="#FFB300" fill="#FFD54F" fillOpacity={0.6} />
+                <Area
+                  type="monotone"
+                  connectNulls
+                  dataKey="orders"
+                  name="Замовлень"
+                  stroke="#FFB300"
+                  fill="#FFD54F"
+                  fillOpacity={0.6}
+                />
               </AreaChart>
             </ResponsiveContainer>
           </Paper>
@@ -170,49 +202,64 @@ export const DemandPage = () => {
               Топ «годин пік» (авто)
             </Typography>
             <Typography variant="caption" display="block" color="text.secondary" sx={{ mb: 1 }}>
-              Поріг: середнє + σ ≈ {peaks?.threshold.toFixed(1) ?? '—'} замовлень/год
+              Пікова година — коли замовлень більше ~{peaks?.threshold.toFixed(1) ?? '—'} на годину
             </Typography>
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart
-                data={(peaks?.peaks ?? []).slice(0, 12).map((p) => ({
-                  name: new Date(p.bucketUtc).toLocaleString('uk-UA', { weekday: 'short', hour: '2-digit' }),
-                  count: p.orderCount,
-                }))}
-                layout="vertical"
-                margin={{ left: 8, right: 16, bottom: 8, top: 28 }}
+            {peakCount < 2 ? (
+              <Box
+                sx={{
+                  height: 260,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'text.secondary',
+                }}
               >
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                <XAxis
-                  type="number"
-                  allowDecimals={false}
-                  label={{ value: 'Кількість замовлень', position: 'insideBottom', offset: -4 }}
-                />
-                <YAxis
-                  dataKey="name"
-                  type="category"
-                  width={100}
-                  tick={{ fontSize: 9 }}
-                  label={{ value: 'Інтервал часу', angle: -90, position: 'insideRight', offset: 10 }}
-                />
-                <Tooltip />
-                <Legend verticalAlign="top" height={22} />
-                <Bar dataKey="count" name="Замовлень" fill="#FF8F00" radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+                <Typography variant="body2">Недостатньо даних за період</Typography>
+              </Box>
+            ) : (
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart
+                  data={peakBars}
+                  layout="vertical"
+                  margin={{ left: 4, right: 16, bottom: 8, top: 28 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                  <XAxis
+                    type="number"
+                    allowDecimals={false}
+                    label={{ value: 'Кількість замовлень', position: 'insideBottom', offset: -4 }}
+                  />
+                  <YAxis
+                    dataKey="name"
+                    type="category"
+                    width={130}
+                    tick={{ fontSize: 11 }}
+                  />
+                  <Tooltip labelFormatter={(label) => `Час: ${label}`} />
+                  <Legend verticalAlign="top" height={22} />
+                  <Bar dataKey="count" name="Замовлень" fill="#FF8F00" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </Paper>
         </Grid>
 
         <Grid item xs={12}>
           <Paper sx={{ p: 2, borderRadius: 2 }} variant="outlined">
-            <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-              Прогноз на 7 днів (годинні оцінки)
-            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
+              <Typography variant="subtitle1" fontWeight={600}>
+                Прогноз на 7 днів (годинні оцінки)
+              </Typography>
+              <IconButton size="small" aria-label="Методологія прогнозу" onClick={() => setMethodologyOpen(true)}>
+                <InfoOutlinedIcon fontSize="small" />
+              </IconButton>
+            </Box>
             <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-              {forecast?.methodology} · профіль з обраного періоду · комірок DOW×H: {forecast?.historyBuckets ?? 0}
+              Прогноз на 7 днів на основі профілю попиту за обраний період
               {forecast?.forecastAnchorUtc != null && (
                 <>
                   {' '}
-                  · прогноз від{' '}
+                  · від{' '}
                   {new Date(forecast.forecastAnchorUtc).toLocaleString('uk-UA', {
                     dateStyle: 'short',
                     timeStyle: 'short',
@@ -221,7 +268,7 @@ export const DemandPage = () => {
               )}
             </Typography>
             <ResponsiveContainer width="100%" height={320}>
-              <LineChart data={chartForecast} margin={{ top: 8, right: 8, left: 8, bottom: 36 }}>
+              <LineChart data={chartForecast} margin={{ top: 8, right: 8, left: 12, bottom: 36 }}>
                 <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
                 <XAxis
                   dataKey="t"
@@ -233,7 +280,7 @@ export const DemandPage = () => {
                   tick={{ fontSize: 11 }}
                   label={{ value: 'Очікуваних замовлень за годину', angle: -90, position: 'insideLeft' }}
                 />
-                <Tooltip />
+                <Tooltip labelFormatter={(label) => `Час: ${label}`} />
                 <Legend verticalAlign="top" height={28} />
                 <Line type="monotone" dataKey="predicted" name="Очікувано замовлень" stroke="#43A047" dot={false} strokeWidth={2} />
               </LineChart>
@@ -249,9 +296,9 @@ export const DemandPage = () => {
             <Table size="small">
               <TableHead>
                 <TableRow>
-                  <TableCell>Час (UTC)</TableCell>
+                  <TableCell>Час</TableCell>
                   <TableCell align="right">Замовлень</TableCell>
-                  <TableCell align="right">Z-оцінка</TableCell>
+                  <TableCell align="right">Відхилення від середнього</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -259,7 +306,7 @@ export const DemandPage = () => {
                   <TableRow key={r.bucketUtc}>
                     <TableCell>{new Date(r.bucketUtc).toLocaleString('uk-UA')}</TableCell>
                     <TableCell align="right">{r.orderCount}</TableCell>
-                    <TableCell align="right">{r.zScore.toFixed(2)}</TableCell>
+                    <TableCell align="right">{formatPeakDeviation(r.orderCount, meanOrders)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -267,6 +314,24 @@ export const DemandPage = () => {
           </Paper>
         </Grid>
       </Grid>
+
+      <Dialog open={methodologyOpen} onClose={() => setMethodologyOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Методологія прогнозу</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+            {forecast?.methodologyUk ??
+              'Середнє замовлень за годину для кожної пари «день тижня × година», прогноз на 168 год вперед з коригуваннями на вихідні та свята.'}
+          </Typography>
+          {forecast?.methodology && (
+            <Typography variant="caption" color="text.disabled" component="pre" sx={{ whiteSpace: 'pre-wrap' }}>
+              {forecast.methodology}
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setMethodologyOpen(false)}>Закрити</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

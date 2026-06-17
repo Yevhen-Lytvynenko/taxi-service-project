@@ -22,6 +22,7 @@ import api, { getApiBase } from '../api/axios';
 import { shortOrderAddress } from '../utils/shortOrderAddress';
 import { OrderTrackingMap, TrackingPhase } from '../components/OrderTrackingMap';
 import { TripChatModal } from '../components/TripChatModal';
+import { TripReviewModal } from '../components/TripReviewModal';
 import { dialPeerPhone } from '../utils/phoneDial';
 import { colors, spacing, radius, typography, mapBottomSheet } from '../theme';
 
@@ -45,6 +46,7 @@ interface Order {
     user?: { fullName: string; phone?: string | null };
     vehicle?: { model: string };
   };
+  reviews?: { id: string; authorId: string; rating: number }[];
 }
 
 function isLngLatPolyline(p: unknown): p is Array<[number, number]> {
@@ -89,6 +91,9 @@ export const OrderTrackingScreen = ({ navigation, route }: OrderTrackingScreenPr
   const [complaintOpen, setComplaintOpen] = useState(false);
   const [complaintText, setComplaintText] = useState('');
   const [complaintSending, setComplaintSending] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [myId, setMyId] = useState<string | null>(null);
+  const completedReviewHandledRef = useRef(false);
   const socketRef = useRef<Socket | null>(null);
   const driverTrackingIdRef = useRef<string | undefined>(undefined);
   const lastDriverMovedRef = useRef<number>(0);
@@ -185,21 +190,38 @@ export const OrderTrackingScreen = ({ navigation, route }: OrderTrackingScreenPr
   }, [fetchOrder]);
 
   useEffect(() => {
+    void api.get('/auth/me').then((r) => setMyId((r.data as { id: string }).id)).catch(() => {});
+  }, []);
+
+  useEffect(() => {
     if (!order) return;
     const prev = prevOrderStatusRef.current;
     prevOrderStatusRef.current = order.status;
     const tracking = ['SEARCHING', 'ACCEPTED', 'ARRIVED', 'IN_PROGRESS'];
     if (!prev || !tracking.includes(prev)) return;
     if (order.status === 'COMPLETED') {
-      Alert.alert('Поїздку завершено', 'Водій закрив замовлення. Дякуємо за поїздку!', [
-        { text: 'OK', onPress: () => navigation.navigate('Order', { screen: 'CreateOrder' }) },
-      ]);
+      const alreadyReviewed =
+        myId != null && (order.reviews ?? []).some((r) => r.authorId === myId);
+      if (!alreadyReviewed && !completedReviewHandledRef.current) {
+        completedReviewHandledRef.current = true;
+        setReviewOpen(true);
+        return;
+      }
+      if (!completedReviewHandledRef.current) {
+        completedReviewHandledRef.current = true;
+        navigation.navigate('Order', { screen: 'CreateOrder' });
+      }
     } else if (order.status === 'CANCELLED') {
       Alert.alert('Замовлення скасовано', '', [
         { text: 'OK', onPress: () => navigation.navigate('Order', { screen: 'CreateOrder' }) },
       ]);
     }
-  }, [order?.status, navigation]);
+  }, [order?.status, navigation, myId, order?.reviews]);
+
+  const finishAfterReview = useCallback(() => {
+    setReviewOpen(false);
+    navigation.navigate('Order', { screen: 'CreateOrder' });
+  }, [navigation]);
 
   driverTrackingIdRef.current = order?.driver?.id;
 
@@ -495,6 +517,16 @@ export const OrderTrackingScreen = ({ navigation, route }: OrderTrackingScreenPr
           myRole="CLIENT"
           canSend={chatCanSend}
           emptyHint="Ще немає повідомлень. Напишіть водію."
+        />
+      ) : null}
+
+      {orderId && order.status === 'COMPLETED' ? (
+        <TripReviewModal
+          visible={reviewOpen}
+          orderId={orderId}
+          title="Оцініть поїздку"
+          subjectName={order.driver?.user?.fullName ?? 'Водій'}
+          onDone={finishAfterReview}
         />
       ) : null}
 

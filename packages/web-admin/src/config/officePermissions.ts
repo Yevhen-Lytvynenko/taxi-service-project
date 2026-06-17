@@ -119,3 +119,51 @@ export function levelMeets(have: PermLevel, need: 'read' | 'write'): boolean {
   const rank: Record<PermLevel, number> = { none: 0, read: 1, write: 2 };
   return rank[have] >= rank[need];
 }
+
+export const PERMISSION_LABELS_UK: Record<OfficePermissionKey, string> = {
+  dashboard: 'Дашборд',
+  orders: 'Замовлення',
+  dispatch: 'Диспетчеризація',
+  live: 'Live-стеження',
+  clients: 'Клієнти',
+  drivers: 'Водії',
+  users: 'Користувачі',
+  employees: 'Співробітники',
+  roles_manage: 'Конструктор ролей',
+  transactions: 'Транзакції',
+  analytics_finance: 'Фінансова аналітика',
+  chats: 'Чати',
+  reviews: 'Відгуки',
+  complaints: 'Скарги',
+  tariffs: 'Тарифи',
+  analytics: 'Аналітика (загальна)',
+  locations: 'GPS / локації',
+  audit: 'Журнал аудиту',
+};
+
+export const PERMISSION_GROUPS: { title: string; keys: OfficePermissionKey[] }[] = [
+  {
+    title: 'Операції',
+    keys: ['dashboard', 'orders', 'dispatch', 'live', 'clients', 'drivers'],
+  },
+  {
+    title: 'Персонал',
+    keys: ['users', 'employees', 'roles_manage'],
+  },
+  {
+    title: 'Фінанси',
+    keys: ['transactions', 'analytics_finance'],
+  },
+  {
+    title: 'Контент',
+    keys: ['chats', 'reviews', 'complaints', 'tariffs'],
+  },
+  {
+    title: 'Аналітика',
+    keys: ['analytics'],
+  },
+  {
+    title: 'Система',
+    keys: ['locations', 'audit'],
+  },
+];

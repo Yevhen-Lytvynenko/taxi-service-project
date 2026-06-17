@@ -1,6 +1,7 @@
 import {
   type OfficePermissionKey,
   type PermLevel,
+  buildEffectivePermissions,
   defaultPermissionsForLegacyRole,
   levelMeets,
 } from './officePermissions';
@@ -159,7 +160,63 @@ export type MenuRowConfig =
   | { type: 'subheader'; text: string }
   | { type: 'link'; text: string; path: string };
 
-export function filterMenuByPathAccess(menu: MenuRowConfig[], role: StaffRole | null): MenuRowConfig[] {
+export const ADMIN_MENU_TEMPLATE: MenuRowConfig[] = [
+  { type: 'subheader', text: 'Операції (ІС)' },
+  { type: 'link', text: 'Дашборд', path: '/dashboard' },
+  { type: 'link', text: 'Користувачі', path: '/users' },
+  { type: 'link', text: 'Клієнти', path: '/clients' },
+  { type: 'link', text: 'Водії', path: '/drivers' },
+  { type: 'link', text: 'Співробітники', path: '/employees' },
+  { type: 'link', text: 'Замовлення', path: '/orders' },
+  { type: 'link', text: 'Фінанси (транзакції)', path: '/transactions' },
+  { type: 'link', text: 'Чати', path: '/chats' },
+  { type: 'link', text: 'Відгуки', path: '/reviews' },
+  { type: 'link', text: 'GPS логи', path: '/locations' },
+  { type: 'link', text: 'Тарифи', path: '/tariffs' },
+  { type: 'link', text: 'Стежування (live)', path: '/live' },
+  { type: 'link', text: 'Скарги', path: '/complaints' },
+  { type: 'link', text: 'Журнал аудиту', path: '/audit-logs' },
+  { type: 'subheader', text: 'Аналітика (демо)' },
+  { type: 'link', text: 'Огляд модуля', path: '/analytics' },
+  { type: 'link', text: 'Прогноз і піки', path: '/analytics/demand' },
+  { type: 'link', text: 'Surge / ціноутворення', path: '/analytics/surge' },
+  { type: 'link', text: 'Гео та теплокарти', path: '/analytics/geo' },
+  { type: 'link', text: 'Водії та автопарк', path: '/analytics/fleet' },
+  { type: 'link', text: 'Фінанси та звіти', path: '/analytics/finance' },
+  { type: 'subheader', text: 'Налаштування' },
+  { type: 'link', text: 'Профіль', path: '/settings/profile' },
+  { type: 'link', text: 'Конструктор ролей', path: '/settings/roles' },
+  { type: 'link', text: 'Нотатки релізу', path: '/settings/release-notes' },
+];
+
+/** Превʼю пунктів меню для обраної ролі та матриці дозволів. */
+export function previewMenuForPermissions(
+  legacyRole: string,
+  permissions: Partial<Record<OfficePermissionKey, PermLevel>>
+): { text: string; path: string }[] {
+  const staff = parseStaffRole(legacyRole) ?? 'DISPATCHER';
+  const effective = buildEffectivePermissions(staff as DbRole, permissions);
+  const levelFor = (key: OfficePermissionKey): PermLevel =>
+    staff === 'ADMIN' ? 'write' : (effective[key] ?? 'none');
+
+  const canAccess = (path: string): boolean => {
+    const p = normalizePath(path);
+    if (p.startsWith('/settings/profile') || p.startsWith('/settings/release-notes')) return true;
+    const rule = pathToPermRule(p);
+    if (!rule) return true;
+    return levelMeets(levelFor(rule.key), rule.min);
+  };
+
+  return ADMIN_MENU_TEMPLATE.filter(
+    (item): item is { type: 'link'; text: string; path: string } =>
+      item.type === 'link' && canAccess(item.path)
+  ).map(({ text, path }) => ({ text, path }));
+}
+
+export function filterMenuByPathAccess(
+  menu: MenuRowConfig[] = ADMIN_MENU_TEMPLATE,
+  role: StaffRole | null
+): MenuRowConfig[] {
   if (!role) return [];
   const passes = (item: MenuRowConfig) => {
     if (item.type === 'divider' || item.type === 'subheader') return true;

@@ -9,8 +9,10 @@ import {
   List,
   ListItem,
   ListItemText,
+  Tabs,
+  Tab,
 } from '@mui/material';
-import { Outlet, useLocation } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import type { AnalyticsRange } from './analyticsTypes';
 import { toIsoEndOfDay, toIsoStartOfDay } from './analyticsTypes';
 import { AnalyticsHint } from './AnalyticsHint';
@@ -33,20 +35,20 @@ function defaultTo(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-function titleFromPath(pathname: string): string {
+function activeTabFromPath(pathname: string): string {
   const seg = pathname.replace(/\/+$/, '').split('/').pop() ?? 'demand';
-  const item = analyticsSectionNav.find((n) => n.to === seg);
-  return item?.label ?? 'Аналітика';
+  return analyticsSectionNav.some((n) => n.to === seg) ? seg : 'demand';
 }
 
 export const AnalyticsLayout = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const [fromDate, setFromDate] = useState(defaultFrom);
   const [toDate, setToDate] = useState(defaultTo);
   const [refreshKey, setRefreshKey] = useState(0);
 
+  const activeTab = activeTabFromPath(location.pathname);
   const bumpRefresh = useCallback(() => setRefreshKey((k) => k + 1), []);
-  const pageTitle = titleFromPath(location.pathname);
 
   const ctx = useMemo<AnalyticsRange>(
     () => ({
@@ -65,22 +67,16 @@ export const AnalyticsLayout = () => {
   return (
     <Box sx={{ width: '100%' }}>
       <Typography component="h1" variant="h4" fontWeight={700} gutterBottom>
-        {pageTitle}
+        Аналітика
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-        Розділи змінюються в меню «Аналітика». Період нижче застосовується до всіх екранів цього модуля (натисніть «Застосувати»
-        після зміни дат).
+        Період нижче застосовується до всіх екранів цього модуля (натисніть «Застосувати» після зміни дат).
       </Typography>
 
       <AnalyticsHint title="Докладніше про модуль аналітики">
         <>
           <Typography variant="body2" color="text.secondary" component="div" sx={{ mb: 2 }}>
             Демонстраційний модуль: попит у часі, surge, гео-щільність, KPI водіїв і фінансові зрізи поверх замовлень і треків.
-            Докладний опис метрик — у{' '}
-            <Typography component="span" variant="body2" sx={{ fontFamily: 'monospace' }}>
-              packages/web-admin/docs/analytics-module-overview.md
-            </Typography>
-            .
           </Typography>
           <List dense disablePadding>
             <ListItem disableGutters>
@@ -101,6 +97,20 @@ export const AnalyticsLayout = () => {
           </List>
         </>
       </AnalyticsHint>
+
+      <Paper sx={{ mb: 2, borderRadius: 2 }} variant="outlined">
+        <Tabs
+          value={activeTab}
+          onChange={(_, v: string) => navigate(`/analytics/${v}`)}
+          variant="scrollable"
+          scrollButtons="auto"
+          sx={{ borderBottom: 1, borderColor: 'divider', px: 1 }}
+        >
+          {analyticsSectionNav.map((item) => (
+            <Tab key={item.to} label={item.label} value={item.to} />
+          ))}
+        </Tabs>
+      </Paper>
 
       <Divider sx={{ mb: 2 }} />
 
